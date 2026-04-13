@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Geoportal Pichari</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <!-- Vector Tiles -->
+  <script src="https://unpkg.com/leaflet.vectorgrid/dist/Leaflet.VectorGrid.bundled.js"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<div class="app-shell">
+  <header class="top-header">
+    <div class="header-left">
+      <span class="kicker">Municipalidad Distrital</span>
+      <h1 class="title">Geoportal | Municipalidad de Pichari</h1>
+      <p class="subtitle">Catastro Urbano, Planeamiento Territorial y Consulta Predial</p>
+    </div>
+    <div class="header-badges">
+      <span class="badge"><span class="dot"></span>Servicio geoespacial activo</span>
+      <span class="badge" id="today-date">Fecha</span>
+    </div>
+  </header>
+
+  <div class="map-wrap">
+
+    <!-- Panel de filtros (izquierda) -->
+    <aside id="filter-panel" class="filter-panel">
+      <p class="filter-title">Buscar Predio</p>
+      <div class="filter-fields">
+        <label class="filter-label" for="f-num-lote">Lote</label>
+        <input class="filter-input" id="f-num-lote" type="text" placeholder="Ej: 01" autocomplete="off" />
+
+        <label class="filter-label" for="f-cod-mz">Manzana</label>
+        <input class="filter-input" id="f-cod-mz" type="text" placeholder="Ej: A-01" autocomplete="off" />
+
+        <label class="filter-label" for="f-sector">Sector</label>
+        <select class="filter-input filter-select" id="f-sector">
+          <option value="">— Todos —</option>
+        </select>
+
+        <label class="filter-label" for="f-cod-catas">Código Catastral</label>
+        <input class="filter-input" id="f-cod-catas" type="text" placeholder="Ej: 010101" autocomplete="off" />
+      </div>
+      <div class="filter-actions">
+        <button id="btn-filter-search" type="button" class="btn-search">Buscar</button>
+        <button id="btn-filter-clear" type="button" class="btn-clear">Limpiar</button>
+      </div>
+      <p id="filter-status" class="filter-status"></p>
+    </aside>
+
+    <aside id="selection-panel" class="selection-panel" aria-hidden="false">
+      <div class="legend-wrap">
+        <p class="legend-title">Leyenda</p>
+        <div class="legend-item">
+          <span class="legend-swatch legend-swatch--lotes" aria-hidden="true"></span>
+          <span>Lotes catastrales</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-swatch legend-swatch--manzanas" aria-hidden="true"></span>
+          <span>Manzanas</span>
+        </div>
+      </div>
+      <p class="fields-title">Atributos del predio</p>
+      <div id="sel-fields" class="fields-list">
+        <div class="field-row">
+          <span class="field-key">Estado</span>
+          <span class="field-value">Seleccione un polígono en el mapa</span>
+        </div>
+      </div>
+    </aside>
+
+    <div id="map"></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+
+</body>
+</html>

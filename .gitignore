@@ -1,0 +1,13 @@
+# Runtime and local-only env vars
+.env
+
+# GeoServer and PostGIS persistent data
+geoserver_data/
+postgis_data/
+
+# VS Code
+.vscode/
+
+# OS
+Thumbs.db
+.DS_Store
