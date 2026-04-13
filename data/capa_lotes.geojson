@@ -1,9 +1,57 @@
-<?xml version="1.0" ?>
-<ServiceExceptionReport
-   version="1.2.0"
-   xmlns="http://www.opengis.net/ogc"
-   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-   xsi:schemaLocation="http://www.opengis.net/ogc http://schemas.opengis.net/wfs/1.0.0/OGC-exception.xsd">
-   <ServiceException code="InvalidParameterValue" locator="namespace">
-      Unknown namespace [geoportal]
-</ServiceException></ServiceExceptionReport>
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 1,
+        "cod_catas": "010101",
+        "num_lote": "01",
+        "cod_mz": "A-01",
+        "sector": "Sector 1",
+        "area": 120.5,
+        "perimetro": 44.2,
+        "propietario": "EJEMPLO PROPIETARIO",
+        "direccion": "Jr. Ejemplo 123",
+        "uso": "Residencial",
+        "estado": "Activo"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-73.839900, -12.521000],
+          [-73.839800, -12.521000],
+          [-73.839800, -12.521100],
+          [-73.839900, -12.521100],
+          [-73.839900, -12.521000]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 2,
+        "cod_catas": "010102",
+        "num_lote": "02",
+        "cod_mz": "A-01",
+        "sector": "Sector 1",
+        "area": 95.3,
+        "perimetro": 39.6,
+        "propietario": "OTRO PROPIETARIO",
+        "direccion": "Jr. Ejemplo 124",
+        "uso": "Comercial",
+        "estado": "Activo"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-73.839800, -12.521000],
+          [-73.839700, -12.521000],
+          [-73.839700, -12.521100],
+          [-73.839800, -12.521100],
+          [-73.839800, -12.521000]
+        ]]
+      }
+    }
+  ]
+}
