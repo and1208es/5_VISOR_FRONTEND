@@ -1,0 +1,22 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "cod_mz": "A-01",
+        "sector": "Sector 1"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-73.840000, -12.520900],
+          [-73.839600, -12.520900],
+          [-73.839600, -12.521200],
+          [-73.840000, -12.521200],
+          [-73.840000, -12.520900]
+        ]]
+      }
+    }
+  ]
+}

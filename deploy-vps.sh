@@ -40,18 +40,15 @@ echo "  Agregando DOMAIN al .env..."
 grep -q "^DOMAIN=" .env && sed -i "s|^DOMAIN=.*|DOMAIN=$DOMAIN|" .env || echo "DOMAIN=$DOMAIN" >> .env
 
 echo "==> [5/6] Obteniendo certificado SSL (Let's Encrypt)..."
-# Primer arranque solo con HTTP para que certbot pueda validar el dominio
-docker compose -f docker-compose.prod.yml up -d web
+# Primer arranque en modo bootstrap HTTP para que certbot valide el dominio
+docker compose -f docker-compose.prod.yml up -d db geoserver web
 
 echo "  Esperando a que nginx este listo..."
 sleep 5
 
-docker run --rm \
-  -v "$(pwd)/certbot_www:/var/www/certbot" \
-  -v "$(pwd)/certbot_certs:/etc/letsencrypt" \
-  certbot/certbot certonly \
+docker compose -f docker-compose.prod.yml run --rm certbot certonly \
     --webroot \
-    --webroot-path=/var/www/certbot \
+    --webroot-path /var/www/certbot \
     --email "$EMAIL" \
     --agree-tos \
     --no-eff-email \
