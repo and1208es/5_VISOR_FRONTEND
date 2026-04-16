@@ -45,8 +45,41 @@ body {
 }
 
 .header-left {
+  min-width: 0;
+}
+
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.brand-logo-wrap {
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 10px 22px rgba(4, 38, 77, 0.28);
+  backdrop-filter: blur(6px);
+}
+
+.brand-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 3px 8px rgba(7, 35, 71, 0.35));
+}
+
+.brand-copy {
   display: grid;
   gap: 3px;
+  min-width: 0;
 }
 
 .kicker {
@@ -451,6 +484,16 @@ body {
   .top-header {
     grid-template-columns: 1fr;
     gap: 10px;
+  }
+
+  .brand-row {
+    align-items: flex-start;
+  }
+
+  .brand-logo-wrap {
+    width: 58px;
+    height: 58px;
+    border-radius: 16px;
   }
 
   .header-badges {
