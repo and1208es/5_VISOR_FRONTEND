@@ -15,7 +15,10 @@ todayEl.textContent = new Date().toLocaleDateString("es-PE", {
   year: "numeric"
 });
 
-var map = L.map("map", { maxZoom: 22 }).setView([-12.520928727075642, -73.83971998253236], 17);
+var STREETS_MAX_ZOOM = 22;
+var SATELLITE_MAX_ZOOM = 22;
+
+var map = L.map("map", { maxZoom: STREETS_MAX_ZOOM }).setView([-12.520928727075642, -73.83971998253236], 17);
 
 var lotesBounds = L.latLngBounds(
   [-12.522877757847823, -73.9776522848367],
@@ -24,10 +27,28 @@ var lotesBounds = L.latLngBounds(
 
 map.setMaxBounds(lotesBounds.pad(0.02));
 
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+var osmBaseLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   attribution: "© OpenStreetMap",
-  maxZoom: 22
-}).addTo(map);
+  maxZoom: STREETS_MAX_ZOOM
+});
+
+var satelliteBaseLayer = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+  attribution: "Tiles © Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+  maxZoom: SATELLITE_MAX_ZOOM,
+  maxNativeZoom: 17
+});
+
+var currentBaseLayer = osmBaseLayer.addTo(map);
+
+function switchBaseLayer(baseName) {
+  var nextBaseLayer = baseName === "satelital" ? satelliteBaseLayer : osmBaseLayer;
+
+  if (currentBaseLayer !== nextBaseLayer) {
+    if (currentBaseLayer && map.hasLayer(currentBaseLayer)) map.removeLayer(currentBaseLayer);
+    currentBaseLayer = nextBaseLayer;
+    currentBaseLayer.addTo(map);
+  }
+}
 
 var DEFAULT_STYLE = {
   fill: true,
@@ -188,6 +209,26 @@ function createLotesLayer(geojson) {
   return L.geoJSON(geojson, {
     style: function () { return DEFAULT_STYLE; },
     onEachFeature: function (feature, layer) {
+      var props = feature.properties || {};
+      var lote = pickFirstProp(props, ["num_lote", "NUM_LOTE", "lote", "LOTE", "numero_lote", "NUMERO_LOTE"]) || "No disponible";
+      var manzana = pickFirstProp(props, ["cod_mz", "COD_MZ", "manzana", "MANZANA", "cod_manzana", "COD_MANZANA"]) || "No disponible";
+      var sector = pickFirstProp(props, ["sector", "SECTOR", "nom_sector", "NOM_SECTOR", "zona", "ZONA"]) || "No disponible";
+
+      layer.bindTooltip(
+        "<div class='parcel-tooltip'>" +
+          "<div class='parcel-tooltip__title'>Información rápida</div>" +
+          "<div class='parcel-tooltip__row'><span class='parcel-tooltip__label'>Manzana</span><span class='parcel-tooltip__value'>" + escapeHtml(manzana) + "</span></div>" +
+          "<div class='parcel-tooltip__row'><span class='parcel-tooltip__label'>Lote</span><span class='parcel-tooltip__value'>" + escapeHtml(lote) + "</span></div>" +
+          "<div class='parcel-tooltip__row'><span class='parcel-tooltip__label'>Sector</span><span class='parcel-tooltip__value'>" + escapeHtml(sector) + "</span></div>" +
+        "</div>",
+        {
+          direction: "top",
+          sticky: true,
+          opacity: 1,
+          className: "leaflet-parcel-tooltip"
+        }
+      );
+
       layer.on("click", function (e) {
         L.DomEvent.stopPropagation(e);
         suppressNextMapClick = true;
@@ -196,7 +237,7 @@ function createLotesLayer(geojson) {
         layer.setStyle(SELECTED_STYLE);
         layer.bringToFront();
         setPanelCompact(false);
-        updateAllFields(feature.properties || {});
+        updateAllFields(props);
         if (isMobileView()) openMobilePanel("info");
       });
     }
@@ -243,18 +284,34 @@ loadLayers();
 var LayerSelectorControl = L.Control.extend({
   options: { position: "bottomleft" },
   onAdd: function () {
-    var container = L.DomUtil.create("div", "leaflet-bar layer-selector-control");
-    var select    = L.DomUtil.create("select", "layer-selector-select", container);
-    select.innerHTML = "<option value='ambas'>Capas: Ambas</option><option value='lotes'>Capas: Solo Lotes</option><option value='manzanas'>Capas: Solo Manzanas</option>";
+    var container   = L.DomUtil.create("div", "leaflet-bar layer-selector-control");
+    var baseLabel   = L.DomUtil.create("div", "layer-selector-label", container);
+    var baseSelect  = L.DomUtil.create("select", "layer-selector-select", container);
+    var layerLabel  = L.DomUtil.create("div", "layer-selector-label", container);
+    var layerSelect = L.DomUtil.create("select", "layer-selector-select", container);
+
+    baseLabel.textContent = "Mapa base";
+    baseSelect.innerHTML = "<option value='osm'>Calles y mapa</option><option value='satelital'>Vista satelital</option>";
+    baseSelect.title = "La vista satelital permite acercar más; en zoom muy alto la imagen puede verse ampliada, pero no se pierde.";
+
+    layerLabel.textContent = "Capas visibles";
+    layerSelect.innerHTML = "<option value='ambas'>Lotes y manzanas</option><option value='lotes'>Solo lotes</option><option value='manzanas'>Solo manzanas</option>";
+
     L.DomEvent.disableClickPropagation(container);
-    L.DomEvent.on(select, "change", function () {
+
+    L.DomEvent.on(baseSelect, "change", function () {
+      switchBaseLayer(baseSelect.value);
+    });
+
+    L.DomEvent.on(layerSelect, "change", function () {
       if (!lotesLayer || !manzanasLayer) return;
-      var value = select.value;
+      var value = layerSelect.value;
       if (value === "lotes") { lotesLayer.addTo(map); map.removeLayer(manzanasLayer); return; }
       if (value === "manzanas") { map.removeLayer(lotesLayer); manzanasLayer.addTo(map); clearSelection(); return; }
       lotesLayer.addTo(map);
       manzanasLayer.addTo(map);
     });
+
     return container;
   }
 });

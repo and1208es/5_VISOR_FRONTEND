@@ -475,14 +475,27 @@ body {
 }
 
 .layer-selector-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid rgba(10, 90, 167, 0.32);
   border-radius: 8px;
-  padding: 4px;
+  padding: 6px;
   box-shadow: 0 6px 18px rgba(9, 62, 119, 0.22);
 }
 
+.layer-selector-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #34618b;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 2px;
+}
+
 .layer-selector-select {
+  min-width: 170px;
   border: 1px solid #c7ddf5;
   border-radius: 6px;
   padding: 6px 8px;
@@ -490,6 +503,61 @@ body {
   color: #1f4d76;
   background: #f8fbff;
   outline: none;
+}
+
+.leaflet-parcel-tooltip {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.leaflet-parcel-tooltip .leaflet-tooltip-content {
+  margin: 0;
+}
+
+.parcel-tooltip {
+  min-width: 190px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255,255,255,0.98), rgba(241,248,255,0.96));
+  border: 1px solid rgba(15, 127, 214, 0.24);
+  box-shadow: 0 12px 28px rgba(7, 48, 92, 0.22);
+  color: #18324d;
+}
+
+.parcel-tooltip__title {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #0a5aa7;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.parcel-tooltip__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+  border-top: 1px solid rgba(15, 127, 214, 0.08);
+}
+
+.parcel-tooltip__row:first-of-type {
+  border-top: none;
+}
+
+.parcel-tooltip__label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #456785;
+}
+
+.parcel-tooltip__value {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f2741;
+  text-align: right;
 }
 
 @keyframes pulse {
