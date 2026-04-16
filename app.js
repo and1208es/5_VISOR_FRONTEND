@@ -40,6 +40,12 @@ var satelliteBaseLayer = L.tileLayer("https://server.arcgisonline.com/ArcGIS/res
 
 var currentBaseLayer = osmBaseLayer.addTo(map);
 
+function syncOverlayOrder() {
+  if (manzanasLayer && map.hasLayer(manzanasLayer)) manzanasLayer.bringToFront();
+  if (lotesLayer && map.hasLayer(lotesLayer)) lotesLayer.bringToFront();
+  if (selectedLayer) selectedLayer.bringToFront();
+}
+
 function switchBaseLayer(baseName) {
   var nextBaseLayer = baseName === "satelital" ? satelliteBaseLayer : osmBaseLayer;
 
@@ -268,6 +274,7 @@ function loadLayers() {
     lotesRawData  = results[0];
     manzanasLayer = createManzanasLayer(results[1]).addTo(map);
     lotesLayer    = createLotesLayer(lotesRawData).addTo(map);
+    syncOverlayOrder();
     populateSectorOptions(lotesRawData);
     if (statusEl) { statusEl.textContent = ""; }
   }).catch(function (err) {
@@ -306,10 +313,11 @@ var LayerSelectorControl = L.Control.extend({
     L.DomEvent.on(layerSelect, "change", function () {
       if (!lotesLayer || !manzanasLayer) return;
       var value = layerSelect.value;
-      if (value === "lotes") { lotesLayer.addTo(map); map.removeLayer(manzanasLayer); return; }
-      if (value === "manzanas") { map.removeLayer(lotesLayer); manzanasLayer.addTo(map); clearSelection(); return; }
+      if (value === "lotes") { lotesLayer.addTo(map); map.removeLayer(manzanasLayer); syncOverlayOrder(); return; }
+      if (value === "manzanas") { map.removeLayer(lotesLayer); manzanasLayer.addTo(map); clearSelection(); syncOverlayOrder(); return; }
       lotesLayer.addTo(map);
       manzanasLayer.addTo(map);
+      syncOverlayOrder();
     });
 
     return container;
