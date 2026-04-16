@@ -46,57 +46,58 @@
   <div class="map-wrap">
     <div id="mobile-backdrop" class="mobile-backdrop"></div>
 
-    <!-- Panel de filtros (izquierda) -->
-    <aside id="filter-panel" class="filter-panel">
-      <div class="panel-head">
-        <p class="filter-title">Buscar Predio</p>
-        <button id="btn-close-filter" type="button" class="panel-close" aria-label="Cerrar filtros">×</button>
-      </div>
-      <div class="filter-fields">
-        <label class="filter-label" for="f-num-lote">Lote</label>
-        <input class="filter-input" id="f-num-lote" type="text" placeholder="Ej: 01" autocomplete="off" />
-
-        <label class="filter-label" for="f-cod-mz">Manzana</label>
-        <input class="filter-input" id="f-cod-mz" type="text" placeholder="Ej: A-01" autocomplete="off" />
-
-        <label class="filter-label" for="f-sector">Sector</label>
-        <select class="filter-input filter-select" id="f-sector">
-          <option value="">— Todos —</option>
-        </select>
-
-        <label class="filter-label" for="f-cod-catas">Código Catastral</label>
-        <input class="filter-input" id="f-cod-catas" type="text" placeholder="Ej: 010101" autocomplete="off" />
-      </div>
-      <div class="filter-actions">
-        <button id="btn-filter-search" type="button" class="btn-search">Buscar</button>
-        <button id="btn-filter-clear" type="button" class="btn-clear">Limpiar</button>
-      </div>
-      <p id="filter-status" class="filter-status"></p>
-    </aside>
-
-    <aside id="selection-panel" class="selection-panel" aria-hidden="false">
-      <div class="panel-head">
-        <p class="legend-title">Leyenda</p>
-        <button id="btn-close-info" type="button" class="panel-close" aria-label="Cerrar información">×</button>
-      </div>
-      <div class="legend-wrap">
-        <div class="legend-item">
-          <span class="legend-swatch legend-swatch--lotes" aria-hidden="true"></span>
-          <span>Lotes catastrales</span>
+    <div class="map-side-panels">
+      <aside id="selection-panel" class="selection-panel" aria-hidden="false">
+        <div class="panel-head">
+          <p class="legend-title">Leyenda</p>
+          <button id="btn-close-info" type="button" class="panel-close" aria-label="Cerrar información">×</button>
         </div>
-        <div class="legend-item">
-          <span class="legend-swatch legend-swatch--manzanas" aria-hidden="true"></span>
-          <span>Manzanas</span>
+        <div class="legend-wrap">
+          <div class="legend-item">
+            <span class="legend-swatch legend-swatch--lotes" aria-hidden="true"></span>
+            <span>Lotes catastrales</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-swatch legend-swatch--manzanas" aria-hidden="true"></span>
+            <span>Manzanas</span>
+          </div>
         </div>
-      </div>
-      <p class="fields-title">Atributos del predio</p>
-      <div id="sel-fields" class="fields-list">
-        <div class="field-row">
-          <span class="field-key">Estado</span>
-          <span class="field-value">Seleccione un polígono en el mapa</span>
+        <p class="fields-title">Atributos del predio</p>
+        <div id="sel-fields" class="fields-list">
+          <div class="field-row">
+            <span class="field-key">Estado</span>
+            <span class="field-value">Seleccione un polígono en el mapa</span>
+          </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+
+      <aside id="filter-panel" class="filter-panel">
+        <div class="panel-head">
+          <p class="filter-title">Buscar Predio</p>
+          <button id="btn-close-filter" type="button" class="panel-close" aria-label="Cerrar filtros">×</button>
+        </div>
+        <div class="filter-fields">
+          <label class="filter-label" for="f-num-lote">Lote</label>
+          <input class="filter-input" id="f-num-lote" type="text" placeholder="Ej: 01" autocomplete="off" />
+
+          <label class="filter-label" for="f-cod-mz">Manzana</label>
+          <input class="filter-input" id="f-cod-mz" type="text" placeholder="Ej: A-01" autocomplete="off" />
+
+          <label class="filter-label" for="f-sector">Sector</label>
+          <select class="filter-input filter-select" id="f-sector">
+            <option value="">— Todos —</option>
+          </select>
+
+          <label class="filter-label" for="f-cod-catas">Código Catastral</label>
+          <input class="filter-input" id="f-cod-catas" type="text" placeholder="Ej: 010101" autocomplete="off" />
+        </div>
+        <div class="filter-actions">
+          <button id="btn-filter-search" type="button" class="btn-search">Buscar</button>
+          <button id="btn-filter-clear" type="button" class="btn-clear">Limpiar</button>
+        </div>
+        <p id="filter-status" class="filter-status"></p>
+      </aside>
+    </div>
 
     <div id="map"></div>
   </div>
