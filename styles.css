@@ -474,47 +474,57 @@ body {
   color: #1a7a4a;
 }
 
-.layer-selector-control {
+.map-tools-control {
+  min-width: 230px;
+  max-width: 240px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(10, 90, 167, 0.32);
-  border-radius: 8px;
-  padding: 6px;
-  box-shadow: 0 6px 18px rgba(9, 62, 119, 0.22);
+  gap: 8px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid rgba(10, 90, 167, 0.28);
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(9, 62, 119, 0.20);
 }
 
-.layer-selector-label {
+.map-tools__title {
+  font-size: 11px;
+  font-weight: 800;
+  color: #0a5aa7;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.map-tools__section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(10, 90, 167, 0.10);
+}
+
+.map-tools__section:first-of-type {
+  padding-top: 0;
+  border-top: none;
+}
+
+.map-tools__label {
   font-size: 10px;
   font-weight: 700;
   color: #34618b;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  margin-top: 2px;
 }
 
-.layer-selector-select {
+.map-tools__select {
   min-width: 170px;
   border: 1px solid #c7ddf5;
-  border-radius: 6px;
-  padding: 6px 8px;
+  border-radius: 8px;
+  padding: 7px 9px;
   font-size: 13px;
   color: #1f4d76;
   background: #f8fbff;
   outline: none;
-}
-
-.measure-control {
-  min-width: 230px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(10, 90, 167, 0.32);
-  border-radius: 8px;
-  box-shadow: 0 6px 18px rgba(9, 62, 119, 0.22);
 }
 
 .measure-control__modes {
@@ -569,6 +579,11 @@ body {
 
 #map.is-measuring {
   cursor: crosshair;
+}
+
+.leaflet-top.leaflet-left .map-tools-control {
+  margin-top: 288px;
+  margin-left: 10px;
 }
 
 .leaflet-parcel-tooltip {
@@ -687,6 +702,12 @@ body {
     opacity: 0;
     pointer-events: none;
     transform: translateY(calc(100% + 20px));
+  }
+
+  .leaflet-top.leaflet-left .map-tools-control {
+    margin-top: 10px;
+    margin-left: 0;
+    max-width: min(240px, calc(100vw - 24px));
   }
 
   .filter-panel.mobile-open,

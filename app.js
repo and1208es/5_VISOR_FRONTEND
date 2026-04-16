@@ -136,7 +136,9 @@ function calculatePolygonArea(latlngs) {
 
 function updateMeasurementUI() {
   if (measurementState.readoutEl) {
-    if (measurementState.mode === "area") {
+    if (!measurementState.mode) {
+      measurementState.readoutEl.textContent = "Selecciona una herramienta";
+    } else if (measurementState.mode === "area") {
       measurementState.readoutEl.textContent = "Área: " + formatArea(measurementState.totalArea) + " · Perímetro: " + formatDistance(measurementState.totalMeters);
     } else {
       measurementState.readoutEl.textContent = "Distancia: " + formatDistance(measurementState.totalMeters);
@@ -493,21 +495,49 @@ function loadLayers() {
 
 loadLayers();
 
-var LayerSelectorControl = L.Control.extend({
-  options: { position: "bottomleft" },
+var MapToolsControl = L.Control.extend({
+  options: { position: "topleft" },
   onAdd: function () {
-    var container   = L.DomUtil.create("div", "leaflet-bar layer-selector-control");
-    var baseLabel   = L.DomUtil.create("div", "layer-selector-label", container);
-    var baseSelect  = L.DomUtil.create("select", "layer-selector-select", container);
-    var layerLabel  = L.DomUtil.create("div", "layer-selector-label", container);
-    var layerSelect = L.DomUtil.create("select", "layer-selector-select", container);
+    var container = L.DomUtil.create("div", "leaflet-bar map-tools-control");
+    var title = L.DomUtil.create("div", "map-tools__title", container);
+    var baseSection = L.DomUtil.create("div", "map-tools__section", container);
+    var baseLabel = L.DomUtil.create("div", "map-tools__label", baseSection);
+    var baseSelect = L.DomUtil.create("select", "map-tools__select", baseSection);
+    var layerSection = L.DomUtil.create("div", "map-tools__section", container);
+    var layerLabel = L.DomUtil.create("div", "map-tools__label", layerSection);
+    var layerSelect = L.DomUtil.create("select", "map-tools__select", layerSection);
+    var measureSection = L.DomUtil.create("div", "map-tools__section", container);
+    var measureLabel = L.DomUtil.create("div", "map-tools__label", measureSection);
+    var modeGroup = L.DomUtil.create("div", "measure-control__modes", measureSection);
+    var distanceButton = L.DomUtil.create("button", "measure-control__button", modeGroup);
+    var areaButton = L.DomUtil.create("button", "measure-control__button", modeGroup);
+    var readout = L.DomUtil.create("div", "measure-control__readout", measureSection);
+    var hint = L.DomUtil.create("div", "measure-control__hint", measureSection);
+    var clearButton = L.DomUtil.create("button", "measure-control__clear", measureSection);
+
+    title.textContent = "Herramientas del mapa";
 
     baseLabel.textContent = "Mapa base";
     baseSelect.innerHTML = "<option value='osm'>Calles y mapa</option><option value='satelital'>Vista satelital</option>";
-    baseSelect.title = "La vista satelital permite acercar más; en zoom muy alto la imagen puede verse ampliada, pero no se pierde.";
+    baseSelect.title = "Cambia entre cartografía de calles y vista satelital.";
 
     layerLabel.textContent = "Capas visibles";
     layerSelect.innerHTML = "<option value='ambas'>Lotes y manzanas</option><option value='lotes'>Solo lotes</option><option value='manzanas'>Solo manzanas</option>";
+
+    measureLabel.textContent = "Medición";
+    distanceButton.type = "button";
+    distanceButton.textContent = "Distancia";
+    distanceButton.title = "Mide una ruta por tramos haciendo clic sobre el mapa.";
+
+    areaButton.type = "button";
+    areaButton.textContent = "Área";
+    areaButton.title = "Delimita un polígono para calcular superficie y perímetro.";
+
+    readout.textContent = "Selecciona una herramienta";
+    hint.textContent = "Activa distancia o área para medir sobre el mapa.";
+
+    clearButton.type = "button";
+    clearButton.textContent = "Limpiar";
 
     L.DomEvent.disableClickPropagation(container);
 
@@ -524,39 +554,6 @@ var LayerSelectorControl = L.Control.extend({
       manzanasLayer.addTo(map);
       syncOverlayOrder();
     });
-
-    return container;
-  }
-});
-
-map.addControl(new LayerSelectorControl());
-
-var MeasurementControl = L.Control.extend({
-  options: { position: "bottomleft" },
-  onAdd: function () {
-    var container = L.DomUtil.create("div", "leaflet-bar measure-control");
-    var modeGroup = L.DomUtil.create("div", "measure-control__modes", container);
-    var distanceButton = L.DomUtil.create("button", "measure-control__button", modeGroup);
-    var areaButton = L.DomUtil.create("button", "measure-control__button", modeGroup);
-    var readout = L.DomUtil.create("div", "measure-control__readout", container);
-    var hint = L.DomUtil.create("div", "measure-control__hint", container);
-    var clearButton = L.DomUtil.create("button", "measure-control__clear", container);
-
-    distanceButton.type = "button";
-    distanceButton.textContent = "Distancia";
-    distanceButton.title = "Mide una ruta por tramos haciendo clic sobre el mapa.";
-
-    areaButton.type = "button";
-    areaButton.textContent = "Área";
-    areaButton.title = "Delimita un polígono para calcular superficie y perímetro.";
-
-    readout.textContent = "Distancia: 0 m";
-    hint.textContent = "Activa distancia o área para medir sobre el mapa.";
-
-    clearButton.type = "button";
-    clearButton.textContent = "Limpiar";
-
-    L.DomEvent.disableClickPropagation(container);
 
     L.DomEvent.on(distanceButton, "click", function (e) {
       L.DomEvent.stop(e);
@@ -584,7 +581,7 @@ var MeasurementControl = L.Control.extend({
   }
 });
 
-map.addControl(new MeasurementControl());
+map.addControl(new MapToolsControl());
 
 document.addEventListener("keydown", function (e) {
   if (e.key === "Escape" && measurementState.active) {
