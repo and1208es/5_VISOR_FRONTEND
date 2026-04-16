@@ -349,8 +349,8 @@ body {
   position: absolute;
   z-index: 1190;
   top: 16px;
-  left: 16px;
-  width: min(240px, calc(100vw - 32px));
+  left: 78px;
+  width: min(240px, calc(100vw - 94px));
   padding: 14px 14px 12px;
   background: rgba(255, 255, 255, 0.95);
   border: 1px solid rgba(10, 90, 167, 0.2);
@@ -474,8 +474,56 @@ body {
   color: #1a7a4a;
 }
 
-.map-tools-control {
-  min-width: 230px;
+.map-tools-shell {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.map-tools-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 6px;
+  background: linear-gradient(180deg, #607a9d, #597394);
+  border: 1px solid rgba(47, 72, 104, 0.42);
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(9, 62, 119, 0.20);
+}
+
+.map-tools__icon-btn {
+  width: 52px;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: none;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #eef5ff;
+  cursor: pointer;
+}
+
+.map-tools__icon-btn.active,
+.map-tools__icon-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.map-tools__icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.map-tools__icon-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.map-tools-panel {
+  min-width: 220px;
   max-width: 240px;
   display: flex;
   flex-direction: column;
@@ -487,6 +535,10 @@ body {
   box-shadow: 0 10px 24px rgba(9, 62, 119, 0.20);
 }
 
+.map-tools-panel.collapsed {
+  display: none;
+}
+
 .map-tools__title {
   font-size: 11px;
   font-weight: 800;
@@ -496,16 +548,9 @@ body {
 }
 
 .map-tools__section {
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 5px;
-  padding-top: 6px;
-  border-top: 1px solid rgba(10, 90, 167, 0.10);
-}
-
-.map-tools__section:first-of-type {
-  padding-top: 0;
-  border-top: none;
 }
 
 .map-tools__label {
@@ -581,9 +626,9 @@ body {
   cursor: crosshair;
 }
 
-.leaflet-top.leaflet-left .map-tools-control {
-  margin-top: 288px;
-  margin-left: 10px;
+.leaflet-top.leaflet-left .map-tools-shell {
+  margin-top: 16px;
+  margin-left: 8px;
 }
 
 .leaflet-parcel-tooltip {

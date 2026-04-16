@@ -103,6 +103,29 @@ var measurementState = {
   clearButtonEl: null
 };
 
+var mapToolsState = {
+  panelEl: null,
+  sections: {},
+  buttons: {},
+  activeSection: null
+};
+
+function activateMapToolsSection(sectionName) {
+  mapToolsState.activeSection = mapToolsState.activeSection === sectionName ? null : sectionName;
+
+  if (mapToolsState.panelEl) {
+    mapToolsState.panelEl.classList.toggle("collapsed", !mapToolsState.activeSection);
+  }
+
+  Object.keys(mapToolsState.sections).forEach(function (key) {
+    mapToolsState.sections[key].style.display = mapToolsState.activeSection === key ? "flex" : "none";
+  });
+
+  Object.keys(mapToolsState.buttons).forEach(function (key) {
+    mapToolsState.buttons[key].classList.toggle("active", mapToolsState.activeSection === key);
+  });
+}
+
 function formatDistance(meters) {
   if (!meters || meters <= 0) return "0 m";
   if (meters < 1000) {
@@ -498,15 +521,16 @@ loadLayers();
 var MapToolsControl = L.Control.extend({
   options: { position: "topleft" },
   onAdd: function () {
-    var container = L.DomUtil.create("div", "leaflet-bar map-tools-control");
-    var title = L.DomUtil.create("div", "map-tools__title", container);
-    var baseSection = L.DomUtil.create("div", "map-tools__section", container);
-    var baseLabel = L.DomUtil.create("div", "map-tools__label", baseSection);
-    var baseSelect = L.DomUtil.create("select", "map-tools__select", baseSection);
-    var layerSection = L.DomUtil.create("div", "map-tools__section", container);
-    var layerLabel = L.DomUtil.create("div", "map-tools__label", layerSection);
-    var layerSelect = L.DomUtil.create("select", "map-tools__select", layerSection);
-    var measureSection = L.DomUtil.create("div", "map-tools__section", container);
+    var shell = L.DomUtil.create("div", "map-tools-shell");
+    var sidebar = L.DomUtil.create("div", "leaflet-bar map-tools-sidebar", shell);
+    var panel = L.DomUtil.create("div", "leaflet-bar map-tools-panel", shell);
+    var title = L.DomUtil.create("div", "map-tools__title", panel);
+    var layersSection = L.DomUtil.create("div", "map-tools__section", panel);
+    var baseLabel = L.DomUtil.create("div", "map-tools__label", layersSection);
+    var baseSelect = L.DomUtil.create("select", "map-tools__select", layersSection);
+    var layerLabel = L.DomUtil.create("div", "map-tools__label", layersSection);
+    var layerSelect = L.DomUtil.create("select", "map-tools__select", layersSection);
+    var measureSection = L.DomUtil.create("div", "map-tools__section", panel);
     var measureLabel = L.DomUtil.create("div", "map-tools__label", measureSection);
     var modeGroup = L.DomUtil.create("div", "measure-control__modes", measureSection);
     var distanceButton = L.DomUtil.create("button", "measure-control__button", modeGroup);
@@ -515,11 +539,24 @@ var MapToolsControl = L.Control.extend({
     var hint = L.DomUtil.create("div", "measure-control__hint", measureSection);
     var clearButton = L.DomUtil.create("button", "measure-control__clear", measureSection);
 
-    title.textContent = "Herramientas del mapa";
+    function createIconButton(icon, label, titleText) {
+      var btn = L.DomUtil.create("button", "map-tools__icon-btn", sidebar);
+      btn.type = "button";
+      btn.title = titleText;
+      btn.setAttribute("aria-label", label);
+      btn.innerHTML = "<span class='map-tools__icon'>" + icon + "</span><span class='map-tools__icon-label'>" + label + "</span>";
+      return btn;
+    }
+
+    var homeBtn = createIconButton("⌂", "Inicio", "Volver a la vista principal del geoportal");
+    var layersBtn = createIconButton("☷", "Capas", "Cambiar mapa base y capas visibles");
+    var measureBtn = createIconButton("⌖", "Medir", "Abrir herramientas de distancia y área");
+    var cleanBtn = createIconButton("✕", "Limpiar", "Limpiar selección y medición");
+
+    title.textContent = "Herramientas";
 
     baseLabel.textContent = "Mapa base";
     baseSelect.innerHTML = "<option value='osm'>Calles y mapa</option><option value='satelital'>Vista satelital</option>";
-    baseSelect.title = "Cambia entre cartografía de calles y vista satelital.";
 
     layerLabel.textContent = "Capas visibles";
     layerSelect.innerHTML = "<option value='ambas'>Lotes y manzanas</option><option value='lotes'>Solo lotes</option><option value='manzanas'>Solo manzanas</option>";
@@ -527,19 +564,37 @@ var MapToolsControl = L.Control.extend({
     measureLabel.textContent = "Medición";
     distanceButton.type = "button";
     distanceButton.textContent = "Distancia";
-    distanceButton.title = "Mide una ruta por tramos haciendo clic sobre el mapa.";
-
     areaButton.type = "button";
     areaButton.textContent = "Área";
-    areaButton.title = "Delimita un polígono para calcular superficie y perímetro.";
-
     readout.textContent = "Selecciona una herramienta";
     hint.textContent = "Activa distancia o área para medir sobre el mapa.";
-
     clearButton.type = "button";
-    clearButton.textContent = "Limpiar";
+    clearButton.textContent = "Limpiar medición";
 
-    L.DomEvent.disableClickPropagation(container);
+    L.DomEvent.disableClickPropagation(shell);
+
+    L.DomEvent.on(homeBtn, "click", function (e) {
+      L.DomEvent.stop(e);
+      map.fitBounds(lotesBounds);
+      clearSelection();
+      if (isMobileView()) closeMobilePanels();
+    });
+
+    L.DomEvent.on(layersBtn, "click", function (e) {
+      L.DomEvent.stop(e);
+      activateMapToolsSection("layers");
+    });
+
+    L.DomEvent.on(measureBtn, "click", function (e) {
+      L.DomEvent.stop(e);
+      activateMapToolsSection("measure");
+    });
+
+    L.DomEvent.on(cleanBtn, "click", function (e) {
+      L.DomEvent.stop(e);
+      clearMeasurement();
+      clearSelection();
+    });
 
     L.DomEvent.on(baseSelect, "change", function () {
       switchBaseLayer(baseSelect.value);
@@ -557,11 +612,13 @@ var MapToolsControl = L.Control.extend({
 
     L.DomEvent.on(distanceButton, "click", function (e) {
       L.DomEvent.stop(e);
+      activateMapToolsSection("measure");
       setMeasurementMode("distance");
     });
 
     L.DomEvent.on(areaButton, "click", function (e) {
       L.DomEvent.stop(e);
+      activateMapToolsSection("measure");
       setMeasurementMode("area");
     });
 
@@ -570,14 +627,20 @@ var MapToolsControl = L.Control.extend({
       clearMeasurement();
     });
 
+    mapToolsState.panelEl = panel;
+    mapToolsState.sections = { layers: layersSection, measure: measureSection };
+    mapToolsState.buttons = { layers: layersBtn, measure: measureBtn };
+
     measurementState.readoutEl = readout;
     measurementState.hintEl = hint;
     measurementState.distanceButtonEl = distanceButton;
     measurementState.areaButtonEl = areaButton;
     measurementState.clearButtonEl = clearButton;
+
+    activateMapToolsSection("layers");
     updateMeasurementUI();
 
-    return container;
+    return shell;
   }
 });
 
