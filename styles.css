@@ -126,6 +126,26 @@ body {
   display: none;
 }
 
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.panel-close {
+  display: none;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #c5d9f0;
+  border-radius: 999px;
+  background: #f4f8ff;
+  color: #1f4d76;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
 .legend-wrap {
   display: flex;
   flex-direction: column;
@@ -156,6 +176,58 @@ body {
   height: 13px;
   border-radius: 3px;
 }
+
+.mobile-action-bar {
+  display: none;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.mobile-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.mobile-action-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.filter-panel,
+.selection-panel {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.mobile-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 1180;
+  background: rgba(15, 33, 56, 0.32);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+.mobile-backdrop.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.mobile-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-12px);
+}
+
 
 .legend-swatch--lotes {
   background: #ffe14d;
@@ -385,8 +457,38 @@ body {
     justify-content: flex-start;
   }
 
+  .mobile-action-bar {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .panel-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .filter-panel,
   .selection-panel {
-    top: 10px;
+    width: calc(100% - 24px);
+    max-width: none;
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: 12px;
+    border-radius: 18px;
+    max-height: min(64vh, 520px);
+    overflow: auto;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(calc(100% + 20px));
+  }
+
+  .filter-panel.mobile-open,
+  .selection-panel.mobile-open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
   }
 
   .field-row {
@@ -396,4 +498,9 @@ body {
   .field-value {
     text-align: left;
   }
+
+  #map {
+    border-top: none;
+  }
 }
+

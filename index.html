@@ -29,13 +29,21 @@
       <span class="badge"><span class="dot"></span>Servicio geoespacial activo</span>
       <span class="badge" id="today-date">Fecha</span>
     </div>
+    <div class="mobile-action-bar">
+      <button id="btn-mobile-filter" type="button" class="mobile-action-btn">Filtros</button>
+      <button id="btn-mobile-info" type="button" class="mobile-action-btn">Info predio</button>
+    </div>
   </header>
 
   <div class="map-wrap">
+    <div id="mobile-backdrop" class="mobile-backdrop"></div>
 
     <!-- Panel de filtros (izquierda) -->
     <aside id="filter-panel" class="filter-panel">
-      <p class="filter-title">Buscar Predio</p>
+      <div class="panel-head">
+        <p class="filter-title">Buscar Predio</p>
+        <button id="btn-close-filter" type="button" class="panel-close" aria-label="Cerrar filtros">×</button>
+      </div>
       <div class="filter-fields">
         <label class="filter-label" for="f-num-lote">Lote</label>
         <input class="filter-input" id="f-num-lote" type="text" placeholder="Ej: 01" autocomplete="off" />
@@ -59,8 +67,11 @@
     </aside>
 
     <aside id="selection-panel" class="selection-panel" aria-hidden="false">
-      <div class="legend-wrap">
+      <div class="panel-head">
         <p class="legend-title">Leyenda</p>
+        <button id="btn-close-info" type="button" class="panel-close" aria-label="Cerrar información">×</button>
+      </div>
+      <div class="legend-wrap">
         <div class="legend-item">
           <span class="legend-swatch legend-swatch--lotes" aria-hidden="true"></span>
           <span>Lotes catastrales</span>

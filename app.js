@@ -1,6 +1,12 @@
 ﻿var todayEl = document.getElementById("today-date");
 var selectionPanelEl = document.getElementById("selection-panel");
+var filterPanelEl = document.getElementById("filter-panel");
+var mobileBackdropEl = document.getElementById("mobile-backdrop");
 var fieldsEl = document.getElementById("sel-fields");
+var btnMobileFilter = document.getElementById("btn-mobile-filter");
+var btnMobileInfo = document.getElementById("btn-mobile-info");
+var btnCloseFilter = document.getElementById("btn-close-filter");
+var btnCloseInfo = document.getElementById("btn-close-info");
 
 todayEl.textContent = new Date().toLocaleDateString("es-PE", {
   weekday: "long",
@@ -152,11 +158,30 @@ function clearSelection() {
   fieldsEl.innerHTML = "<div class='field-row'><span class='field-key'>Estado</span><span class='field-value'>Seleccione un polígono en el mapa</span></div>";
 }
 
+function isMobileView() {
+  return window.innerWidth <= 860;
+}
+
+function closeMobilePanels() {
+  filterPanelEl.classList.remove("mobile-open");
+  selectionPanelEl.classList.remove("mobile-open");
+  if (mobileBackdropEl) mobileBackdropEl.classList.remove("active");
+}
+
+function openMobilePanel(panelName) {
+  if (!isMobileView()) return;
+  closeMobilePanels();
+  if (panelName === "filter") filterPanelEl.classList.add("mobile-open");
+  if (panelName === "info") selectionPanelEl.classList.add("mobile-open");
+  if (mobileBackdropEl) mobileBackdropEl.classList.add("active");
+}
+
 setPanelCompact(true);
 
 map.on("click", function () {
   if (suppressNextMapClick) { suppressNextMapClick = false; return; }
   clearSelection();
+  if (isMobileView()) closeMobilePanels();
 });
 
 function createLotesLayer(geojson) {
@@ -172,6 +197,7 @@ function createLotesLayer(geojson) {
         layer.bringToFront();
         setPanelCompact(false);
         updateAllFields(feature.properties || {});
+        if (isMobileView()) openMobilePanel("info");
       });
     }
   });
@@ -325,6 +351,7 @@ function searchFeatures() {
   setPanelCompact(false);
   updateAllFields(match.properties || {});
   setFilterStatus("Predio encontrado.", "success");
+  if (isMobileView()) openMobilePanel("info");
 }
 
 btnSearch.addEventListener("click", function () { searchFeatures(); });
@@ -332,6 +359,35 @@ btnSearch.addEventListener("click", function () { searchFeatures(); });
 [filterNumLote, filterCodMz, filterCodCatas].forEach(function (input) {
   input.addEventListener("keydown", function (e) { if (e.key === "Enter") searchFeatures(); });
 });
+
+if (btnMobileFilter && btnMobileInfo) {
+  btnMobileFilter.addEventListener("click", function () {
+    if (filterPanelEl.classList.contains("mobile-open")) closeMobilePanels();
+    else openMobilePanel("filter");
+  });
+
+  btnMobileInfo.addEventListener("click", function () {
+    if (selectionPanelEl.classList.contains("mobile-open")) closeMobilePanels();
+    else openMobilePanel("info");
+  });
+
+  if (btnCloseFilter) btnCloseFilter.addEventListener("click", closeMobilePanels);
+  if (btnCloseInfo) btnCloseInfo.addEventListener("click", closeMobilePanels);
+  if (mobileBackdropEl) mobileBackdropEl.addEventListener("click", closeMobilePanels);
+
+  function updateMobilePanelState() {
+    if (isMobileView()) {
+      closeMobilePanels();
+    } else {
+      filterPanelEl.classList.remove("mobile-open");
+      selectionPanelEl.classList.remove("mobile-open");
+      if (mobileBackdropEl) mobileBackdropEl.classList.remove("active");
+    }
+  }
+
+  updateMobilePanelState();
+  window.addEventListener("resize", updateMobilePanelState);
+}
 
 btnClear.addEventListener("click", function () {
   filterNumLote.value = "";
