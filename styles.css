@@ -454,7 +454,7 @@ body {
   }
 
   .header-badges {
-    justify-content: flex-start;
+    display: none;
   }
 
   .mobile-action-bar {
