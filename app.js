@@ -87,6 +87,201 @@ var lotesRawData  = null;
 
 var selectedLayer = null;
 var suppressNextMapClick = false;
+var measurementState = {
+  active: false,
+  mode: null,
+  points: [],
+  markers: [],
+  line: null,
+  polygon: null,
+  totalMeters: 0,
+  totalArea: 0,
+  readoutEl: null,
+  hintEl: null,
+  distanceButtonEl: null,
+  areaButtonEl: null,
+  clearButtonEl: null
+};
+
+function formatDistance(meters) {
+  if (!meters || meters <= 0) return "0 m";
+  if (meters < 1000) {
+    return meters.toLocaleString("es-PE", { maximumFractionDigits: 2 }) + " m";
+  }
+  return (meters / 1000).toLocaleString("es-PE", { maximumFractionDigits: 3 }) + " km";
+}
+
+function formatArea(squareMeters) {
+  if (!squareMeters || squareMeters <= 0) return "0 m²";
+  if (squareMeters < 1000000) {
+    return squareMeters.toLocaleString("es-PE", { maximumFractionDigits: 2 }) + " m²";
+  }
+  return (squareMeters / 1000000).toLocaleString("es-PE", { maximumFractionDigits: 3 }) + " km²";
+}
+
+function calculatePolygonArea(latlngs) {
+  if (!latlngs || latlngs.length < 3) return 0;
+  var area = 0;
+  var d2r = Math.PI / 180;
+  var earthRadius = 6378137.0;
+
+  for (var i = 0; i < latlngs.length; i++) {
+    var p1 = latlngs[i];
+    var p2 = latlngs[(i + 1) % latlngs.length];
+    area += ((p2.lng - p1.lng) * d2r) * (2 + Math.sin(p1.lat * d2r) + Math.sin(p2.lat * d2r));
+  }
+
+  return Math.abs(area * earthRadius * earthRadius / 2.0);
+}
+
+function updateMeasurementUI() {
+  if (measurementState.readoutEl) {
+    if (measurementState.mode === "area") {
+      measurementState.readoutEl.textContent = "Área: " + formatArea(measurementState.totalArea) + " · Perímetro: " + formatDistance(measurementState.totalMeters);
+    } else {
+      measurementState.readoutEl.textContent = "Distancia: " + formatDistance(measurementState.totalMeters);
+    }
+  }
+
+  if (measurementState.hintEl) {
+    if (!measurementState.active) {
+      measurementState.hintEl.textContent = "Activa distancia o área para medir sobre el mapa.";
+    } else if (measurementState.mode === "area" && measurementState.points.length < 3) {
+      measurementState.hintEl.textContent = "Marca al menos 3 puntos para calcular el área.";
+    } else if (measurementState.mode === "area") {
+      measurementState.hintEl.textContent = "Sigue agregando vértices para refinar el polígono.";
+    } else if (measurementState.points.length === 0) {
+      measurementState.hintEl.textContent = "Haz clic en el mapa para iniciar la medición.";
+    } else {
+      measurementState.hintEl.textContent = "Sigue haciendo clic para sumar más tramos.";
+    }
+  }
+
+  if (measurementState.distanceButtonEl) {
+    measurementState.distanceButtonEl.classList.toggle("active", measurementState.active && measurementState.mode === "distance");
+    measurementState.distanceButtonEl.setAttribute("aria-pressed", measurementState.active && measurementState.mode === "distance" ? "true" : "false");
+  }
+
+  if (measurementState.areaButtonEl) {
+    measurementState.areaButtonEl.classList.toggle("active", measurementState.active && measurementState.mode === "area");
+    measurementState.areaButtonEl.setAttribute("aria-pressed", measurementState.active && measurementState.mode === "area" ? "true" : "false");
+  }
+
+  if (measurementState.clearButtonEl) {
+    measurementState.clearButtonEl.disabled = measurementState.points.length === 0;
+  }
+}
+
+function clearMeasurement() {
+  measurementState.points = [];
+  measurementState.totalMeters = 0;
+  measurementState.totalArea = 0;
+
+  measurementState.markers.forEach(function (marker) {
+    map.removeLayer(marker);
+  });
+  measurementState.markers = [];
+
+  if (measurementState.line) {
+    map.removeLayer(measurementState.line);
+    measurementState.line = null;
+  }
+
+  if (measurementState.polygon) {
+    map.removeLayer(measurementState.polygon);
+    measurementState.polygon = null;
+  }
+
+  updateMeasurementUI();
+}
+
+function setMeasurementMode(nextMode) {
+  var isSameModeActive = measurementState.active && measurementState.mode === nextMode;
+
+  if (isSameModeActive) {
+    measurementState.active = false;
+    measurementState.mode = null;
+    map.getContainer().classList.remove("is-measuring");
+    updateMeasurementUI();
+    return;
+  }
+
+  if (measurementState.mode !== nextMode) {
+    clearMeasurement();
+  }
+
+  measurementState.active = true;
+  measurementState.mode = nextMode;
+  map.getContainer().classList.add("is-measuring");
+  updateMeasurementUI();
+}
+
+function addMeasurementPoint(latlng) {
+  if (!measurementState.active || !latlng || !measurementState.mode) return;
+
+  var lastPoint = measurementState.points.length ? measurementState.points[measurementState.points.length - 1] : null;
+  measurementState.points.push(latlng);
+
+  var marker = L.circleMarker(latlng, {
+    radius: 5,
+    weight: 2,
+    color: "#0a5aa7",
+    fillColor: "#ffffff",
+    fillOpacity: 1
+  }).addTo(map);
+
+  measurementState.markers.push(marker);
+
+  if (lastPoint) {
+    measurementState.totalMeters += map.distance(lastPoint, latlng);
+  }
+
+  if (measurementState.mode === "distance") {
+    if (measurementState.line) {
+      measurementState.line.setLatLngs(measurementState.points);
+    } else {
+      measurementState.line = L.polyline(measurementState.points, {
+        color: "#0f7fd6",
+        weight: 3,
+        dashArray: "8, 6"
+      }).addTo(map);
+    }
+  }
+
+  if (measurementState.mode === "area") {
+    if (measurementState.line) {
+      measurementState.line.setLatLngs(measurementState.points);
+    } else {
+      measurementState.line = L.polyline(measurementState.points, {
+        color: "#0f7fd6",
+        weight: 2,
+        dashArray: "6, 4"
+      }).addTo(map);
+    }
+
+    if (measurementState.points.length >= 3) {
+      measurementState.totalArea = calculatePolygonArea(measurementState.points);
+      measurementState.totalMeters = 0;
+      for (var i = 1; i < measurementState.points.length; i++) {
+        measurementState.totalMeters += map.distance(measurementState.points[i - 1], measurementState.points[i]);
+      }
+      measurementState.totalMeters += map.distance(measurementState.points[measurementState.points.length - 1], measurementState.points[0]);
+
+      if (measurementState.polygon) {
+        measurementState.polygon.setLatLngs(measurementState.points);
+      } else {
+        measurementState.polygon = L.polygon(measurementState.points, {
+          color: "#0a5aa7",
+          weight: 2,
+          fillColor: "#3ea7ff",
+          fillOpacity: 0.18
+        }).addTo(map);
+      }
+    }
+  }
+
+  updateMeasurementUI();
+}
 
 function pickFirstProp(props, keys) {
   for (var i = 0; i < keys.length; i++) {
@@ -205,7 +400,11 @@ function openMobilePanel(panelName) {
 
 setPanelCompact(true);
 
-map.on("click", function () {
+map.on("click", function (e) {
+  if (measurementState.active) {
+    addMeasurementPoint(e.latlng);
+    return;
+  }
   if (suppressNextMapClick) { suppressNextMapClick = false; return; }
   clearSelection();
   if (isMobileView()) closeMobilePanels();
@@ -237,6 +436,12 @@ function createLotesLayer(geojson) {
 
       layer.on("click", function (e) {
         L.DomEvent.stopPropagation(e);
+
+        if (measurementState.active) {
+          addMeasurementPoint(e.latlng || layer.getBounds().getCenter());
+          return;
+        }
+
         suppressNextMapClick = true;
         if (selectedLayer !== null) { selectedLayer.setStyle(DEFAULT_STYLE); }
         selectedLayer = layer;
@@ -325,6 +530,70 @@ var LayerSelectorControl = L.Control.extend({
 });
 
 map.addControl(new LayerSelectorControl());
+
+var MeasurementControl = L.Control.extend({
+  options: { position: "bottomleft" },
+  onAdd: function () {
+    var container = L.DomUtil.create("div", "leaflet-bar measure-control");
+    var modeGroup = L.DomUtil.create("div", "measure-control__modes", container);
+    var distanceButton = L.DomUtil.create("button", "measure-control__button", modeGroup);
+    var areaButton = L.DomUtil.create("button", "measure-control__button", modeGroup);
+    var readout = L.DomUtil.create("div", "measure-control__readout", container);
+    var hint = L.DomUtil.create("div", "measure-control__hint", container);
+    var clearButton = L.DomUtil.create("button", "measure-control__clear", container);
+
+    distanceButton.type = "button";
+    distanceButton.textContent = "Distancia";
+    distanceButton.title = "Mide una ruta por tramos haciendo clic sobre el mapa.";
+
+    areaButton.type = "button";
+    areaButton.textContent = "Área";
+    areaButton.title = "Delimita un polígono para calcular superficie y perímetro.";
+
+    readout.textContent = "Distancia: 0 m";
+    hint.textContent = "Activa distancia o área para medir sobre el mapa.";
+
+    clearButton.type = "button";
+    clearButton.textContent = "Limpiar";
+
+    L.DomEvent.disableClickPropagation(container);
+
+    L.DomEvent.on(distanceButton, "click", function (e) {
+      L.DomEvent.stop(e);
+      setMeasurementMode("distance");
+    });
+
+    L.DomEvent.on(areaButton, "click", function (e) {
+      L.DomEvent.stop(e);
+      setMeasurementMode("area");
+    });
+
+    L.DomEvent.on(clearButton, "click", function (e) {
+      L.DomEvent.stop(e);
+      clearMeasurement();
+    });
+
+    measurementState.readoutEl = readout;
+    measurementState.hintEl = hint;
+    measurementState.distanceButtonEl = distanceButton;
+    measurementState.areaButtonEl = areaButton;
+    measurementState.clearButtonEl = clearButton;
+    updateMeasurementUI();
+
+    return container;
+  }
+});
+
+map.addControl(new MeasurementControl());
+
+document.addEventListener("keydown", function (e) {
+  if (e.key === "Escape" && measurementState.active) {
+    measurementState.active = false;
+    measurementState.mode = null;
+    map.getContainer().classList.remove("is-measuring");
+    updateMeasurementUI();
+  }
+});
 
 var filterNumLote  = document.getElementById("f-num-lote");
 var filterCodMz    = document.getElementById("f-cod-mz");
