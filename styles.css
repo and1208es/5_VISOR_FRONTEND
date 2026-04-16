@@ -627,6 +627,27 @@ body {
   line-height: 1.25;
 }
 
+.export-action-btn {
+  width: 100%;
+  background: var(--brand);
+  color: #fff;
+}
+
+.export-status {
+  min-height: 16px;
+  font-size: 11px;
+  color: #4b6784;
+  line-height: 1.25;
+}
+
+.export-status.success {
+  color: #1a7a4a;
+}
+
+.export-status.error {
+  color: #c0392b;
+}
+
 #map.is-measuring {
   cursor: crosshair;
 }

@@ -29,13 +29,15 @@ map.setMaxBounds(lotesBounds.pad(0.02));
 
 var osmBaseLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   attribution: "© OpenStreetMap",
-  maxZoom: STREETS_MAX_ZOOM
+  maxZoom: STREETS_MAX_ZOOM,
+  crossOrigin: true
 });
 
 var satelliteBaseLayer = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
   attribution: "Tiles © Esri, Maxar, Earthstar Geographics, and the GIS User Community",
   maxZoom: SATELLITE_MAX_ZOOM,
-  maxNativeZoom: 17
+  maxNativeZoom: 17,
+  crossOrigin: true
 });
 
 var currentBaseLayer = osmBaseLayer.addTo(map);
@@ -123,6 +125,66 @@ function activateMapToolsSection(sectionName) {
 
   Object.keys(mapToolsState.buttons).forEach(function (key) {
     mapToolsState.buttons[key].classList.toggle("active", mapToolsState.activeSection === key);
+  });
+}
+
+function setExportStatus(message, type) {
+  if (!mapToolsState.exportStatusEl) return;
+  mapToolsState.exportStatusEl.textContent = message || "";
+  mapToolsState.exportStatusEl.className = "export-status" + (type ? " " + type : "");
+}
+
+function exportMapToPDF() {
+  var mapEl = document.getElementById("map");
+  if (!mapEl) return;
+
+  if (typeof html2canvas !== "function" || !window.jspdf || !window.jspdf.jsPDF) {
+    setExportStatus("No se pudo cargar el generador PDF.", "error");
+    return;
+  }
+
+  setExportStatus("Generando PDF...", "");
+
+  requestAnimationFrame(function () {
+    html2canvas(mapEl, {
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: "#ffffff",
+      scale: 2,
+      logging: false
+    }).then(function (canvas) {
+      var pdf = new window.jspdf.jsPDF({
+        orientation: canvas.width >= canvas.height ? "landscape" : "portrait",
+        unit: "mm",
+        format: "a4"
+      });
+
+      var pageWidth = pdf.internal.pageSize.getWidth();
+      var pageHeight = pdf.internal.pageSize.getHeight();
+      var margin = 10;
+      var headerY = 12;
+      var contentTop = 24;
+      var maxWidth = pageWidth - (margin * 2);
+      var maxHeight = pageHeight - contentTop - margin;
+      var ratio = Math.min(maxWidth / canvas.width, maxHeight / canvas.height);
+      var imgWidth = canvas.width * ratio;
+      var imgHeight = canvas.height * ratio;
+      var fileName = "geoportal-pichari-" + new Date().toISOString().slice(0, 10) + ".pdf";
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(14);
+      pdf.text("Geoportal Municipalidad de Pichari", margin, headerY);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+      pdf.text("Vista actual del mapa", margin, headerY + 6);
+      pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", margin, contentTop, imgWidth, imgHeight);
+      pdf.save(fileName);
+
+      setExportStatus("PDF descargado correctamente.", "success");
+    }).catch(function (error) {
+      console.error("Error al exportar PDF:", error);
+      setExportStatus("No se pudo generar el PDF. Reintenta.", "error");
+    });
   });
 }
 
@@ -538,6 +600,10 @@ var MapToolsControl = L.Control.extend({
     var readout = L.DomUtil.create("div", "measure-control__readout", measureSection);
     var hint = L.DomUtil.create("div", "measure-control__hint", measureSection);
     var clearButton = L.DomUtil.create("button", "measure-control__clear", measureSection);
+    var exportSection = L.DomUtil.create("div", "map-tools__section", panel);
+    var exportLabel = L.DomUtil.create("div", "map-tools__label", exportSection);
+    var exportButton = L.DomUtil.create("button", "measure-control__button export-action-btn", exportSection);
+    var exportStatus = L.DomUtil.create("div", "export-status", exportSection);
 
     function createIconButton(icon, label, titleText) {
       var btn = L.DomUtil.create("button", "map-tools__icon-btn", sidebar);
@@ -551,6 +617,7 @@ var MapToolsControl = L.Control.extend({
     var homeBtn = createIconButton("⌂", "Inicio", "Volver a la vista principal del geoportal");
     var layersBtn = createIconButton("☷", "Capas", "Cambiar mapa base y capas visibles");
     var measureBtn = createIconButton("⌖", "Medir", "Abrir herramientas de distancia y área");
+    var printBtn = createIconButton("⎙", "PDF", "Descargar una captura del mapa en PDF");
     var cleanBtn = createIconButton("✕", "Limpiar", "Limpiar selección y medición");
 
     title.textContent = "Herramientas";
@@ -571,6 +638,11 @@ var MapToolsControl = L.Control.extend({
     clearButton.type = "button";
     clearButton.textContent = "Limpiar medición";
 
+    exportLabel.textContent = "Impresión";
+    exportButton.type = "button";
+    exportButton.textContent = "Descargar PDF";
+    exportStatus.textContent = "Genera una captura de la vista actual del mapa.";
+
     L.DomEvent.disableClickPropagation(shell);
 
     L.DomEvent.on(homeBtn, "click", function (e) {
@@ -590,10 +662,17 @@ var MapToolsControl = L.Control.extend({
       activateMapToolsSection("measure");
     });
 
+    L.DomEvent.on(printBtn, "click", function (e) {
+      L.DomEvent.stop(e);
+      activateMapToolsSection("print");
+      exportMapToPDF();
+    });
+
     L.DomEvent.on(cleanBtn, "click", function (e) {
       L.DomEvent.stop(e);
       clearMeasurement();
       clearSelection();
+      setExportStatus("Genera una captura de la vista actual del mapa.", "");
     });
 
     L.DomEvent.on(baseSelect, "change", function () {
@@ -627,9 +706,16 @@ var MapToolsControl = L.Control.extend({
       clearMeasurement();
     });
 
+    L.DomEvent.on(exportButton, "click", function (e) {
+      L.DomEvent.stop(e);
+      activateMapToolsSection("print");
+      exportMapToPDF();
+    });
+
     mapToolsState.panelEl = panel;
-    mapToolsState.sections = { layers: layersSection, measure: measureSection };
-    mapToolsState.buttons = { layers: layersBtn, measure: measureBtn };
+    mapToolsState.sections = { layers: layersSection, measure: measureSection, print: exportSection };
+    mapToolsState.buttons = { layers: layersBtn, measure: measureBtn, print: printBtn };
+    mapToolsState.exportStatusEl = exportStatus;
 
     measurementState.readoutEl = readout;
     measurementState.hintEl = hint;
