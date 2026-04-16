@@ -447,14 +447,15 @@ body {
   100% { transform: scale(1); opacity: 1; }
 }
 
-@media (max-width: 860px) {
+@media (max-width: 1100px) {
   .top-header {
     grid-template-columns: 1fr;
     gap: 10px;
   }
 
   .header-badges {
-    display: none;
+    display: none !important;
+    visibility: hidden;
   }
 
   .mobile-action-bar {
