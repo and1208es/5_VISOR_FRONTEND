@@ -1,6 +1,10 @@
 # Runtime and local-only env vars
 .env
 
+# Python cache/build artifacts
+__pycache__/
+*.py[cod]
+
 # GeoServer and PostGIS persistent data
 geoserver_data/
 postgis_data/
