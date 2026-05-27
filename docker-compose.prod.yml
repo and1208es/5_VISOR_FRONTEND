@@ -30,8 +30,34 @@ services:
       GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
     volumes:
       - geoserver_data:/opt/geoserver_data
+    ports:
+      - "8082:8080"
     expose:
       - "8080"
+
+  backend:
+    build:
+      context: ./backend
+    container_name: geoportal_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      geoserver:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENCODED}@db:5432/${POSTGRES_DB}
+      DB_SCHEMA: geoportal
+      SECRET_KEY: ${API_SECRET_KEY}
+      GEOSERVER_URL: http://geoserver:8080/geoserver
+      GEOSERVER_WORKSPACE: ${GEOSERVER_WORKSPACE}
+      GEOSERVER_USER: ${GEOSERVER_ADMIN_USER}
+      GEOSERVER_PASS: ${GEOSERVER_ADMIN_PASSWORD}
+      APP_ADMIN_USER: ${APP_ADMIN_USER}
+      APP_ADMIN_PASSWORD: ${APP_ADMIN_PASSWORD}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+    expose:
+      - "8000"
 
   web:
     image: nginx:1.27-alpine
@@ -39,6 +65,7 @@ services:
     restart: unless-stopped
     depends_on:
       - geoserver
+      - backend
     ports:
       - "80:80"
       - "443:443"

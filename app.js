@@ -7,6 +7,8 @@ var btnMobileFilter = document.getElementById("btn-mobile-filter");
 var btnMobileInfo = document.getElementById("btn-mobile-info");
 var btnCloseFilter = document.getElementById("btn-close-filter");
 var btnCloseInfo = document.getElementById("btn-close-info");
+var measurementDisplayEl = document.getElementById("measurement-display");
+var measurementReadoutDisplayEl = document.getElementById("measurement-readout");
 
 todayEl.textContent = new Date().toLocaleDateString("es-PE", {
   weekday: "long",
@@ -18,17 +20,46 @@ todayEl.textContent = new Date().toLocaleDateString("es-PE", {
 var STREETS_MAX_ZOOM = 22;
 var SATELLITE_MAX_ZOOM = 22;
 
-var map = L.map("map", { maxZoom: STREETS_MAX_ZOOM }).setView([-12.520928727075642, -73.83971998253236], 17);
+var map = L.map("map", {
+  maxZoom: STREETS_MAX_ZOOM,
+  minZoom: 14,
+  preferCanvas: true,
+  inertia: true,
+  inertiaDeceleration: 2500,
+  inertiaMaxSpeed: 1500,
+  bounceAtZoomLimits: false,
+  zoomAnimation: true,
+  fadeAnimation: false,
+  markerZoomAnimation: false,
+  wheelDebounceTime: 18,
+  wheelPxPerZoomLevel: 90,
+  maxBoundsViscosity: 0.15,
+  zoomSnap: 0.5,
+  zoomDelta: 0.5
+}).setView([-12.520928727075642, -73.83971998253236], 17);
 
 var lotesBounds = L.latLngBounds(
   [-12.522877757847823, -73.9776522848367],
   [-12.168404765620012, -73.8211851939101]
 );
 
-map.setMaxBounds(lotesBounds.pad(0.02));
+// Límites de arrastre deshabilitados para navegación completamente libre
+// map.setMaxBounds(lotesBounds.pad(0.9));
 
-var osmBaseLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  attribution: "© OpenStreetMap",
+var osmStandardLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: "© OpenStreetMap contributors",
+  maxZoom: STREETS_MAX_ZOOM,
+  crossOrigin: true
+});
+
+var osmHumanitarianLayer = L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {
+  attribution: "© OpenStreetMap contributors, HOT",
+  maxZoom: STREETS_MAX_ZOOM,
+  crossOrigin: true
+});
+
+var osmFranceLayer = L.tileLayer("https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png", {
+  attribution: "© OpenStreetMap contributors, OSM France",
   maxZoom: STREETS_MAX_ZOOM,
   crossOrigin: true
 });
@@ -40,16 +71,26 @@ var satelliteBaseLayer = L.tileLayer("https://server.arcgisonline.com/ArcGIS/res
   crossOrigin: true
 });
 
-var currentBaseLayer = osmBaseLayer.addTo(map);
+var baseLayerCatalog = {
+  osm: osmStandardLayer,
+  osm_hot: osmHumanitarianLayer,
+  osm_fr: osmFranceLayer,
+  satelital: satelliteBaseLayer
+};
+
+var currentBaseLayer = baseLayerCatalog.osm.addTo(map);
 
 function syncOverlayOrder() {
   if (manzanasLayer && map.hasLayer(manzanasLayer)) manzanasLayer.bringToFront();
+  extraOverlayLayers.forEach(function (entry) {
+    if (entry.layer && map.hasLayer(entry.layer)) entry.layer.bringToFront();
+  });
   if (lotesLayer && map.hasLayer(lotesLayer)) lotesLayer.bringToFront();
   if (selectedLayer) selectedLayer.bringToFront();
 }
 
 function switchBaseLayer(baseName) {
-  var nextBaseLayer = baseName === "satelital" ? satelliteBaseLayer : osmBaseLayer;
+  var nextBaseLayer = baseLayerCatalog[baseName] || baseLayerCatalog.osm;
 
   if (currentBaseLayer !== nextBaseLayer) {
     if (currentBaseLayer && map.hasLayer(currentBaseLayer)) map.removeLayer(currentBaseLayer);
@@ -83,12 +124,33 @@ var MANZANAS_STYLE = {
   interactive: false
 };
 
+var EXTRA_LAYER_COLOR_PALETTE = [
+  { color: "#8a5a0b", fillColor: "#f5c879" },
+  { color: "#0d6a4f", fillColor: "#8adfbc" },
+  { color: "#6e275c", fillColor: "#e7a9d7" },
+  { color: "#4b4fc9", fillColor: "#a9b5ff" }
+];
+
 var manzanasLayer = null;
 var lotesLayer    = null;
 var lotesRawData  = null;
+var extraOverlayLayers = [];
 
 var selectedLayer = null;
 var suppressNextMapClick = false;
+var dataSourceState = {
+  mode: "geoserver",
+  workspace: "geoportal",
+  lotesTypeName: "geoportal:lotes",
+  manzanasTypeName: "geoportal:manzanas",
+  fallbackToLocal: true,
+  resolvedSource: null
+};
+var layerConfigState = {
+  extraLayers: [],
+  hiddenFields: [],
+  visibleFields: []
+};
 var measurementState = {
   active: false,
   mode: null,
@@ -113,7 +175,13 @@ var mapToolsState = {
 };
 
 function activateMapToolsSection(sectionName) {
-  mapToolsState.activeSection = mapToolsState.activeSection === sectionName ? null : sectionName;
+  var isMeasuringActive = measurementState.active && sectionName === "measure";
+  
+  if (!isMeasuringActive) {
+    mapToolsState.activeSection = mapToolsState.activeSection === sectionName ? null : sectionName;
+  } else {
+    mapToolsState.activeSection = "measure";
+  }
 
   if (mapToolsState.panelEl) {
     mapToolsState.panelEl.classList.toggle("collapsed", !mapToolsState.activeSection);
@@ -219,6 +287,42 @@ function calculatePolygonArea(latlngs) {
   return Math.abs(area * earthRadius * earthRadius / 2.0);
 }
 
+function getOuterRingLatLngs(geometry) {
+  if (!geometry || !geometry.type || !geometry.coordinates) return [];
+
+  if (geometry.type === "Polygon" && geometry.coordinates[0]) {
+    return geometry.coordinates[0].map(function (coord) {
+      return L.latLng(coord[1], coord[0]);
+    });
+  }
+
+  if (geometry.type === "MultiPolygon" && geometry.coordinates[0] && geometry.coordinates[0][0]) {
+    return geometry.coordinates[0][0].map(function (coord) {
+      return L.latLng(coord[1], coord[0]);
+    });
+  }
+
+  return [];
+}
+
+function calculateGeometryPerimeter(geometry) {
+  var latlngs = getOuterRingLatLngs(geometry);
+  if (!latlngs || latlngs.length < 2) return 0;
+
+  var totalMeters = 0;
+  for (var i = 1; i < latlngs.length; i++) {
+    totalMeters += map.distance(latlngs[i - 1], latlngs[i]);
+  }
+
+  var firstPoint = latlngs[0];
+  var lastPoint = latlngs[latlngs.length - 1];
+  if (firstPoint.lat !== lastPoint.lat || firstPoint.lng !== lastPoint.lng) {
+    totalMeters += map.distance(lastPoint, firstPoint);
+  }
+
+  return totalMeters;
+}
+
 function updateMeasurementUI() {
   if (measurementState.readoutEl) {
     if (!measurementState.mode) {
@@ -236,11 +340,11 @@ function updateMeasurementUI() {
     } else if (measurementState.mode === "area" && measurementState.points.length < 3) {
       measurementState.hintEl.textContent = "Marca al menos 3 puntos para calcular el área.";
     } else if (measurementState.mode === "area") {
-      measurementState.hintEl.textContent = "Sigue agregando vértices para refinar el polígono.";
+      measurementState.hintEl.textContent = "Sigue agregando vértices. Haz clic nuevamente en el botón de modo para nueva medición, o usa 'Limpiar medición' para terminar.";
     } else if (measurementState.points.length === 0) {
       measurementState.hintEl.textContent = "Haz clic en el mapa para iniciar la medición.";
     } else {
-      measurementState.hintEl.textContent = "Sigue haciendo clic para sumar más tramos.";
+      measurementState.hintEl.textContent = "Sigue haciendo clic. Haz clic nuevamente en el botón de modo para nueva medición.";
     }
   }
 
@@ -256,6 +360,23 @@ function updateMeasurementUI() {
 
   if (measurementState.clearButtonEl) {
     measurementState.clearButtonEl.disabled = measurementState.points.length === 0;
+  }
+
+  if (measurementReadoutDisplayEl) {
+    if (measurementState.active) {
+      if (measurementState.mode === "area") {
+        measurementReadoutDisplayEl.textContent = "Área: " + formatArea(measurementState.totalArea) + " · Perímetro: " + formatDistance(measurementState.totalMeters);
+      } else {
+        measurementReadoutDisplayEl.textContent = "Distancia: " + formatDistance(measurementState.totalMeters);
+      }
+      if (measurementDisplayEl) {
+        measurementDisplayEl.classList.remove("measurement-display--hidden");
+      }
+    } else {
+      if (measurementDisplayEl) {
+        measurementDisplayEl.classList.add("measurement-display--hidden");
+      }
+    }
   }
 }
 
@@ -282,14 +403,22 @@ function clearMeasurement() {
   updateMeasurementUI();
 }
 
+function stopMeasurementMode(closePanel) {
+  clearMeasurement();
+  measurementState.active = false;
+  measurementState.mode = null;
+  map.getContainer().classList.remove("is-measuring");
+  if (closePanel) {
+    activateMapToolsSection(null);
+  }
+  updateMeasurementUI();
+}
+
 function setMeasurementMode(nextMode) {
   var isSameModeActive = measurementState.active && measurementState.mode === nextMode;
 
   if (isSameModeActive) {
-    measurementState.active = false;
-    measurementState.mode = null;
-    map.getContainer().classList.remove("is-measuring");
-    updateMeasurementUI();
+    clearMeasurement();
     return;
   }
 
@@ -390,18 +519,20 @@ function escapeHtml(str) {
 }
 
 var ORDERED_FIELDS = [
-  { key: "id",          aliases: ["id", "ID", "gid", "GID", "fid", "FID"] },
-  { key: "codigo",      aliases: ["codigo", "CODIGO", "catastro_cod", "CAT_COD"] },
-  { key: "cod_catas",   aliases: ["cod_catas", "COD_CATAS", "cod_catastral", "COD_CATASTRAL"] },
-  { key: "num_lote",    aliases: ["num_lote", "NUM_LOTE", "lote", "LOTE", "numero_lote", "NUMERO_LOTE"] },
-  { key: "cod_mz",      aliases: ["cod_mz", "COD_MZ", "manzana", "MANZANA", "cod_manzana", "COD_MANZANA"] },
-  { key: "sector",      aliases: ["sector", "SECTOR", "nom_sector", "NOM_SECTOR", "zona", "ZONA"] },
-  { key: "area",        aliases: ["area", "AREA", "area_m2", "AREA_M2", "Shape_Area", "shape_area"] },
-  { key: "perimetro",   aliases: ["perimetro", "PERIMETRO", "perimeter", "PERIMETER", "Shape_Leng", "shape_leng"] },
-  { key: "propietario", aliases: ["propietario", "PROPIETARIO"] },
-  { key: "direccion",   aliases: ["direccion", "DIRECCION"] },
-  { key: "uso",         aliases: ["uso", "USO"] },
-  { key: "estado",      aliases: ["estado", "ESTADO"] }
+  { key: "Codigo", aliases: ["codigo", "CODIGO", "catastro_cod", "CAT_COD"] },
+  { key: "Codigo catastral", aliases: ["cod_catas", "COD_CATAS", "cod_catastral", "COD_CATASTRAL"] },
+  { key: "Numero de lote", aliases: ["num_lote", "NUM_LOTE", "lote", "LOTE", "numero_lote", "NUMERO_LOTE"] },
+  { key: "ID del lote", aliases: ["lote_id", "LOTE_ID"] },
+  { key: "Manzana", aliases: ["cod_mz", "COD_MZ", "manzana", "MANZANA", "cod_manzana", "COD_MANZANA"] },
+  { key: "Sector", aliases: ["sector", "SECTOR", "nom_sector", "NOM_SECTOR", "zona", "ZONA"] },
+  { key: "Area (m2)", aliases: ["area", "AREA", "area_m2", "AREA_M2", "Shape_Area", "shape_area"] },
+  { key: "Perimetro (m)", aliases: ["perimetro", "PERIMETRO", "perimetro_m", "PERIMETRO_M", "perimeter", "PERIMETER", "Shape_Leng", "shape_leng"] },
+  { key: "Propietario", aliases: ["propietario", "PROPIETARIO"] },
+  { key: "Direccion", aliases: ["direccion", "DIRECCION"] },
+  { key: "Uso", aliases: ["uso", "USO"] },
+  { key: "Estado", aliases: ["estado", "ESTADO"] },
+  { key: "Condicion", aliases: ["condicion", "CONDICION"] },
+  { key: "Identificador", aliases: ["id", "ID", "gid", "GID", "fid", "FID"] }
 ];
 
 function findPropKey(props, aliases) {
@@ -420,16 +551,52 @@ function formatFieldValue(value) {
   return String(value);
 }
 
-function updateAllFields(props) {
+function normalizeHiddenFieldName(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function normalizeVisibleFieldName(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function hasVisibleFieldsFilter() {
+  return Array.isArray(layerConfigState.visibleFields) && layerConfigState.visibleFields.length > 0;
+}
+
+function isVisibleField(fieldName) {
+  var normalizedName = normalizeVisibleFieldName(fieldName);
+  if (!normalizedName) return false;
+  return layerConfigState.visibleFields.indexOf(normalizedName) !== -1;
+}
+
+function isHiddenField(fieldName) {
+  var normalizedName = normalizeHiddenFieldName(fieldName);
+  if (!normalizedName) return false;
+  return layerConfigState.hiddenFields.indexOf(normalizedName) !== -1;
+}
+
+function updateAllFields(props, geometry) {
   var incomingProps = props || {};
   var incomingKeys  = Object.keys(incomingProps);
   var usedKeys = {};
   var rows = "";
+  var derivedPerimeter = calculateGeometryPerimeter(geometry);
 
   for (var e = 0; e < ORDERED_FIELDS.length; e++) {
     var field      = ORDERED_FIELDS[e];
+    var showOrderedField = !hasVisibleFieldsFilter() || isVisibleField(field.key) || field.aliases.some(function (alias) {
+      return isVisibleField(alias);
+    });
+    if (!showOrderedField) continue;
+    var hideOrderedField = isHiddenField(field.key) || field.aliases.some(function (alias) {
+      return isHiddenField(alias);
+    });
+    if (hideOrderedField) continue;
     var matchedKey = findPropKey(incomingProps, field.aliases);
     var value      = matchedKey ? incomingProps[matchedKey] : undefined;
+    if ((field.aliases.indexOf("perimetro") !== -1 || field.aliases.indexOf("PERIMETRO") !== -1) && (value === null || value === undefined || value === "") && derivedPerimeter > 0) {
+      value = derivedPerimeter;
+    }
     var isEmpty    = value === null || value === undefined || value === "";
     var rawValue   = isEmpty ? "Vacio" : formatFieldValue(value);
     rows += "<div class='field-row'><span class='field-key'>" + escapeHtml(field.key) + "</span><span class='field-value'>" + escapeHtml(rawValue) + "</span></div>";
@@ -438,6 +605,8 @@ function updateAllFields(props) {
 
   for (var i = 0; i < incomingKeys.length; i++) {
     var inKey = incomingKeys[i];
+    if (hasVisibleFieldsFilter() && !isVisibleField(inKey)) continue;
+    if (isHiddenField(inKey)) continue;
     if (!usedKeys[inKey]) {
       var extraValue = incomingProps[inKey];
       var extraIsEmpty = extraValue === null || extraValue === undefined || extraValue === "";
@@ -468,7 +637,7 @@ function clearSelection() {
 }
 
 function isMobileView() {
-  return window.innerWidth <= 860;
+  return window.innerWidth <= 1100;
 }
 
 function closeMobilePanels() {
@@ -535,7 +704,7 @@ function createLotesLayer(geojson) {
         layer.setStyle(SELECTED_STYLE);
         layer.bringToFront();
         setPanelCompact(false);
-        updateAllFields(props);
+        updateAllFields(props, feature.geometry);
         if (isMobileView()) openMobilePanel("info");
       });
     }
@@ -549,31 +718,301 @@ function createManzanasLayer(geojson) {
   });
 }
 
+function normalizeLayerConfig(rawConfig) {
+  if (!rawConfig || !Array.isArray(rawConfig.extraLayers)) {
+    return [];
+  }
+
+  return rawConfig.extraLayers.filter(function (entry) {
+    if (!entry || !entry.id) return false;
+    var sourceType = String(entry.sourceType || "wfs").toLowerCase();
+    if (sourceType === "wms") {
+      return Boolean(entry.wmsLayers || entry.typeName);
+    }
+    return Boolean(entry.typeName);
+  }).map(function (entry) {
+    var sourceType = String(entry.sourceType || "wfs").toLowerCase();
+    var defaultWmsUrl = "/geoserver/" + dataSourceState.workspace + "/wms";
+    return {
+      id: String(entry.id),
+      label: entry.label ? String(entry.label) : String(entry.id),
+      sourceType: sourceType === "wms" ? "wms" : "wfs",
+      typeName: entry.typeName ? String(entry.typeName) : null,
+      fallbackPath: entry.fallbackPath ? String(entry.fallbackPath) : null,
+      visible: entry.visible !== false,
+      style: entry.style || {},
+      labelField: entry.labelField ? String(entry.labelField) : null,
+      wmsUrl: entry.wmsUrl ? String(entry.wmsUrl) : defaultWmsUrl,
+      wmsLayers: entry.wmsLayers ? String(entry.wmsLayers) : (entry.typeName ? String(entry.typeName) : null),
+      wmsFormat: entry.wmsFormat ? String(entry.wmsFormat) : "image/png",
+      wmsTransparent: entry.wmsTransparent !== false,
+      wmsVersion: entry.wmsVersion ? String(entry.wmsVersion) : "1.1.1",
+      wmsStyles: entry.wmsStyles ? String(entry.wmsStyles) : "",
+      wmsCrs: entry.wmsCrs ? String(entry.wmsCrs) : "EPSG:4326",
+      wmsOpacity: entry.wmsOpacity !== undefined ? Number(entry.wmsOpacity) : 1,
+      wmsAttribution: entry.wmsAttribution ? String(entry.wmsAttribution) : "",
+      wmsTiled: entry.wmsTiled === true,
+      wmsExtraParams: entry.wmsExtraParams && typeof entry.wmsExtraParams === "object" ? entry.wmsExtraParams : {}
+    };
+  });
+}
+
+function loadLayerConfig() {
+  return fetch("layer-config.json", { cache: "no-store" }).then(function (response) {
+    if (!response.ok) {
+      return { extraLayers: [], hiddenFields: [], visibleFields: [] };
+    }
+    return response.json();
+  }).catch(function () {
+    return { extraLayers: [], hiddenFields: [], visibleFields: [] };
+  });
+}
+
+function normalizeHiddenFields(rawConfig) {
+  if (!rawConfig || !Array.isArray(rawConfig.hiddenFields)) return [];
+  return rawConfig.hiddenFields
+    .map(normalizeHiddenFieldName)
+    .filter(function (value, index, list) {
+      return value && list.indexOf(value) === index;
+    });
+}
+
+function normalizeVisibleFields(rawConfig) {
+  if (!rawConfig || !Array.isArray(rawConfig.visibleFields)) return [];
+  return rawConfig.visibleFields
+    .map(normalizeVisibleFieldName)
+    .filter(function (value, index, list) {
+      return value && list.indexOf(value) === index;
+    });
+}
+
+function getExtraLayerStyle(layerDefinition, index) {
+  var palette = EXTRA_LAYER_COLOR_PALETTE[index % EXTRA_LAYER_COLOR_PALETTE.length];
+  return {
+    fill: true,
+    weight: layerDefinition.style.weight || 2,
+    color: layerDefinition.style.color || palette.color,
+    fillColor: layerDefinition.style.fillColor || palette.fillColor,
+    fillOpacity: layerDefinition.style.fillOpacity !== undefined ? layerDefinition.style.fillOpacity : 0.22
+  };
+}
+
+function createExtraOverlayLayer(geojson, layerDefinition, index) {
+  var layerStyle = getExtraLayerStyle(layerDefinition, index);
+
+  return L.geoJSON(geojson, {
+    style: function () { return layerStyle; },
+    onEachFeature: function (feature, layer) {
+      if (!layerDefinition.labelField) return;
+      var props = feature.properties || {};
+      if (!Object.prototype.hasOwnProperty.call(props, layerDefinition.labelField)) return;
+      var labelValue = props[layerDefinition.labelField];
+      if (labelValue === null || labelValue === undefined || labelValue === "") return;
+      layer.bindTooltip(String(labelValue), {
+        direction: "top",
+        sticky: true,
+        opacity: 0.95
+      });
+    }
+  });
+}
+
+function createExtraWmsLayer(layerDefinition) {
+  var configuredCrs = String(layerDefinition.wmsCrs || "EPSG:4326").toUpperCase();
+  var leafletCrs = configuredCrs === "EPSG:3857" ? L.CRS.EPSG3857 : L.CRS.EPSG4326;
+  var baseOptions = {
+    layers: layerDefinition.wmsLayers,
+    format: layerDefinition.wmsFormat,
+    transparent: layerDefinition.wmsTransparent,
+    styles: layerDefinition.wmsStyles,
+    crs: leafletCrs,
+    uppercase: true,
+    crossOrigin: true,
+    opacity: Math.max(0, Math.min(1, layerDefinition.wmsOpacity)),
+    attribution: layerDefinition.wmsAttribution,
+    tiled: layerDefinition.wmsTiled,
+    updateWhenIdle: true,
+    keepBuffer: 1
+  };
+
+  Object.keys(layerDefinition.wmsExtraParams || {}).forEach(function (key) {
+    baseOptions[key] = layerDefinition.wmsExtraParams[key];
+  });
+
+  var primaryVersion = String(layerDefinition.wmsVersion || "1.1.1");
+  var fallbackVersion = primaryVersion === "1.3.0" ? "1.1.1" : "1.3.0";
+  var tileErrorCount = 0;
+  var didFallback = false;
+  var hostLayer = L.layerGroup();
+  var currentLayer = null;
+
+  function mountLayer(version) {
+    var layerOptions = Object.assign({}, baseOptions, { version: version });
+    var nextLayer = L.tileLayer.wms(layerDefinition.wmsUrl, layerOptions);
+
+    nextLayer.on("tileload", function () {
+      tileErrorCount = 0;
+    });
+
+    nextLayer.on("tileerror", function () {
+      tileErrorCount += 1;
+      if (!didFallback && tileErrorCount >= 3) {
+        didFallback = true;
+        tileErrorCount = 0;
+        console.warn("WMS " + layerDefinition.label + " presento errores de carga. Reintentando con version " + fallbackVersion + ".");
+        hostLayer.removeLayer(nextLayer);
+        currentLayer = mountLayer(fallbackVersion);
+        hostLayer.addLayer(currentLayer);
+      }
+    });
+
+    return nextLayer;
+  }
+
+  currentLayer = mountLayer(primaryVersion);
+  hostLayer.addLayer(currentLayer);
+  return hostLayer;
+}
+
+function buildGeoServerWfsUrl(typeName) {
+  return "/geoserver/" + dataSourceState.workspace + "/ows" +
+    "?service=WFS" +
+    "&version=1.0.0" +
+    "&request=GetFeature" +
+    "&typeName=" + encodeURIComponent(typeName) +
+    "&outputFormat=" + encodeURIComponent("application/json") +
+    "&srsName=EPSG:4326";
+}
+
+function fetchGeoJson(url, sourceLabel) {
+  return fetch(url).then(function (response) {
+    if (!response.ok) {
+      throw new Error(sourceLabel + " no disponible (HTTP " + response.status + ")");
+    }
+    return response.json();
+  });
+}
+
+function fetchLayerCollection(geoServerTypeName, fallbackPath, fallbackLabel) {
+  var geoServerUrl = buildGeoServerWfsUrl(geoServerTypeName);
+
+  if (dataSourceState.mode === "local") {
+    return fetchGeoJson(fallbackPath, fallbackLabel).then(function (geojson) {
+      return { geojson: geojson, source: "local" };
+    });
+  }
+
+  return fetchGeoJson(geoServerUrl, geoServerTypeName).then(function (geojson) {
+    return { geojson: geojson, source: "geoserver" };
+  }).catch(function (error) {
+    if (!dataSourceState.fallbackToLocal || !fallbackPath) {
+      throw error;
+    }
+
+    console.warn("No se pudo cargar " + geoServerTypeName + " desde GeoServer. Se usara el archivo local.", error);
+    return fetchGeoJson(fallbackPath, fallbackLabel).then(function (geojson) {
+      return { geojson: geojson, source: "local" };
+    });
+  });
+}
+
+function clearExtraOverlayLayers() {
+  extraOverlayLayers.forEach(function (entry) {
+    if (entry.layer && map.hasLayer(entry.layer)) {
+      map.removeLayer(entry.layer);
+    }
+  });
+  extraOverlayLayers = [];
+}
+
+function loadConfiguredExtraLayers() {
+  return Promise.all(layerConfigState.extraLayers.map(function (layerDefinition, index) {
+    if (layerDefinition.sourceType === "wms") {
+      return Promise.resolve({
+        definition: layerDefinition,
+        source: layerDefinition.wmsUrl.indexOf("/geoserver/") !== -1 ? "geoserver" : "remote-wms",
+        index: index,
+        mode: "wms"
+      });
+    }
+
+    return fetchLayerCollection(
+      layerDefinition.typeName,
+      layerDefinition.fallbackPath,
+      layerDefinition.label
+    ).then(function (result) {
+      return {
+        definition: layerDefinition,
+        geojson: result.geojson,
+        source: result.source,
+        index: index,
+        mode: "wfs"
+      };
+    }).catch(function (error) {
+      console.warn("No se pudo cargar la capa extra " + layerDefinition.label + ". Se omitira.", error);
+      return null;
+    });
+  })).then(function (entries) {
+    return entries.filter(function (entry) { return entry !== null; });
+  });
+}
+
 function loadLayers() {
   var statusEl = document.getElementById("filter-status");
-  if (statusEl) { statusEl.textContent = "Cargando capas..."; }
+  if (statusEl) {
+    statusEl.textContent = "";
+    statusEl.style.display = "none";
+  }
 
-  Promise.all([
-    fetch("data/capa_lotes.geojson").then(function (r) {
-      if (!r.ok) throw new Error("capa_lotes.geojson no encontrado (HTTP " + r.status + ")");
-      return r.json();
-    }),
-    fetch("data/capa_manzanas.geojson").then(function (r) {
-      if (!r.ok) throw new Error("capa_manzanas.geojson no encontrado (HTTP " + r.status + ")");
-      return r.json();
-    })
-  ]).then(function (results) {
-    lotesRawData  = results[0];
-    manzanasLayer = createManzanasLayer(results[1]).addTo(map);
+  loadLayerConfig().then(function (rawConfig) {
+    layerConfigState.extraLayers = normalizeLayerConfig(rawConfig);
+    layerConfigState.hiddenFields = normalizeHiddenFields(rawConfig);
+    layerConfigState.visibleFields = normalizeVisibleFields(rawConfig);
+
+    return Promise.all([
+      fetchLayerCollection(dataSourceState.lotesTypeName, "data/capa_lotes.geojson", "capa_lotes.geojson"),
+      fetchLayerCollection(dataSourceState.manzanasTypeName, "data/capa_manzanas.geojson", "capa_manzanas.geojson"),
+      loadConfiguredExtraLayers()
+    ]);
+  }).then(function (results) {
+    clearExtraOverlayLayers();
+
+    lotesRawData  = results[0].geojson;
+    manzanasLayer = createManzanasLayer(results[1].geojson).addTo(map);
     lotesLayer    = createLotesLayer(lotesRawData).addTo(map);
+
+    extraOverlayLayers = results[2].map(function (entry) {
+      var leafletLayer = entry.mode === "wms"
+        ? createExtraWmsLayer(entry.definition)
+        : createExtraOverlayLayer(entry.geojson, entry.definition, entry.index);
+      if (entry.definition.visible) {
+        leafletLayer.addTo(map);
+      }
+      return {
+        id: entry.definition.id,
+        label: entry.definition.label,
+        source: entry.source,
+        layer: leafletLayer
+      };
+    });
+
+    var allSources = [results[0].source, results[1].source];
+    extraOverlayLayers.forEach(function (entry) { allSources.push(entry.source); });
+    dataSourceState.resolvedSource = allSources.every(function (source) { return source === "geoserver"; }) ? "geoserver" : "local";
+
     syncOverlayOrder();
     populateSectorOptions(lotesRawData);
-    if (statusEl) { statusEl.textContent = ""; }
+    if (statusEl) {
+      statusEl.textContent = "";
+      statusEl.className = "filter-status";
+      statusEl.style.display = "none";
+    }
   }).catch(function (err) {
-    console.error("Error cargando GeoJSON:", err);
+    console.error("Error cargando capas:", err);
     if (statusEl) {
       statusEl.textContent = "Error: " + err.message;
       statusEl.className = "filter-status error";
+      statusEl.style.display = "";
     }
   });
 }
@@ -588,8 +1027,6 @@ var MapToolsControl = L.Control.extend({
     var panel = L.DomUtil.create("div", "leaflet-bar map-tools-panel", shell);
     var title = L.DomUtil.create("div", "map-tools__title", panel);
     var layersSection = L.DomUtil.create("div", "map-tools__section", panel);
-    var baseLabel = L.DomUtil.create("div", "map-tools__label", layersSection);
-    var baseSelect = L.DomUtil.create("select", "map-tools__select", layersSection);
     var layerLabel = L.DomUtil.create("div", "map-tools__label", layersSection);
     var layerSelect = L.DomUtil.create("select", "map-tools__select", layersSection);
     var measureSection = L.DomUtil.create("div", "map-tools__section", panel);
@@ -615,15 +1052,12 @@ var MapToolsControl = L.Control.extend({
     }
 
     var homeBtn = createIconButton("⌂", "Inicio", "Volver a la vista principal del geoportal");
-    var layersBtn = createIconButton("☷", "Capas", "Cambiar mapa base y capas visibles");
+    var layersBtn = createIconButton("☷", "Capas", "Cambiar capas visibles");
     var measureBtn = createIconButton("⌖", "Medir", "Abrir herramientas de distancia y área");
     var printBtn = createIconButton("⎙", "PDF", "Descargar una captura del mapa en PDF");
     var cleanBtn = createIconButton("✕", "Limpiar", "Limpiar selección y medición");
 
     title.textContent = "Herramientas";
-
-    baseLabel.textContent = "Mapa base";
-    baseSelect.innerHTML = "<option value='osm'>Calles y mapa</option><option value='satelital'>Vista satelital</option>";
 
     layerLabel.textContent = "Capas visibles";
     layerSelect.innerHTML = "<option value='ambas'>Lotes y manzanas</option><option value='lotes'>Solo lotes</option><option value='manzanas'>Solo manzanas</option>";
@@ -670,13 +1104,9 @@ var MapToolsControl = L.Control.extend({
 
     L.DomEvent.on(cleanBtn, "click", function (e) {
       L.DomEvent.stop(e);
-      clearMeasurement();
+      stopMeasurementMode(false);
       clearSelection();
       setExportStatus("Genera una captura de la vista actual del mapa.", "");
-    });
-
-    L.DomEvent.on(baseSelect, "change", function () {
-      switchBaseLayer(baseSelect.value);
     });
 
     L.DomEvent.on(layerSelect, "change", function () {
@@ -703,7 +1133,7 @@ var MapToolsControl = L.Control.extend({
 
     L.DomEvent.on(clearButton, "click", function (e) {
       L.DomEvent.stop(e);
-      clearMeasurement();
+      stopMeasurementMode(true);
     });
 
     L.DomEvent.on(exportButton, "click", function (e) {
@@ -732,6 +1162,36 @@ var MapToolsControl = L.Control.extend({
 
 map.addControl(new MapToolsControl());
 
+var BaseMapControl = L.Control.extend({
+  options: { position: "bottomleft" },
+  onAdd: function () {
+    var shell = L.DomUtil.create("div", "leaflet-bar base-map-control");
+    var label = L.DomUtil.create("label", "base-map-control__label", shell);
+    var select = L.DomUtil.create("select", "base-map-control__select", shell);
+
+    label.textContent = "Mapa base";
+    label.setAttribute("for", "base-map-selector");
+
+    select.id = "base-map-selector";
+    select.innerHTML = [
+      "<option value='osm'>OpenStreetMap Estándar</option>",
+      "<option value='osm_hot'>OpenStreetMap Humanitario</option>",
+      "<option value='osm_fr'>OpenStreetMap Francia</option>",
+      "<option value='satelital'>Satelital</option>"
+    ].join("");
+    select.value = "osm";
+
+    L.DomEvent.disableClickPropagation(shell);
+    L.DomEvent.on(select, "change", function () {
+      switchBaseLayer(select.value);
+    });
+
+    return shell;
+  }
+});
+
+map.addControl(new BaseMapControl());
+
 document.addEventListener("keydown", function (e) {
   if (e.key === "Escape" && measurementState.active) {
     measurementState.active = false;
@@ -749,26 +1209,59 @@ var filterStatusEl = document.getElementById("filter-status");
 var btnSearch      = document.getElementById("btn-filter-search");
 var btnClear       = document.getElementById("btn-filter-clear");
 
+function normalizeSectorValue(value) {
+  return String(value || "").trim();
+}
+
+function appendSectorOption(sectorValue) {
+  var normalized = normalizeSectorValue(sectorValue);
+  if (!normalized || !filterSector) return;
+
+  var targetKey = normalized.toLowerCase();
+  for (var i = 0; i < filterSector.options.length; i++) {
+    var existing = normalizeSectorValue(filterSector.options[i].value).toLowerCase();
+    if (existing === targetKey) return;
+  }
+
+  var opt = document.createElement("option");
+  opt.value = normalized;
+  opt.textContent = normalized;
+  filterSector.appendChild(opt);
+}
+
 function populateSectorOptions(geojson) {
-  if (!geojson || !geojson.features) return;
+  if (!geojson || !geojson.features || !filterSector) return;
+
+  var selectedValue = filterSector.value;
+  filterSector.innerHTML = "<option value=''>— Todos —</option>";
+
   var seen = {};
   var values = [];
   geojson.features.forEach(function (f) {
-    var v = f.properties && pickFirstProp(f.properties, ["sector", "SECTOR", "nom_sector", "NOM_SECTOR"]);
-    if (v !== null && v !== undefined && v !== "" && !seen[v]) { seen[v] = true; values.push(String(v)); }
+    var rawSector = f.properties && pickFirstProp(f.properties, ["sector", "SECTOR", "nom_sector", "NOM_SECTOR", "zona", "ZONA"]);
+    var normalized = normalizeSectorValue(rawSector);
+    var key = normalized.toLowerCase();
+    if (normalized && !seen[key]) {
+      seen[key] = true;
+      values.push(normalized);
+    }
   });
+
   values.sort(function (a, b) { return a.localeCompare(b, "es", { numeric: true }); });
   values.forEach(function (val) {
-    var opt = document.createElement("option");
-    opt.value = val;
-    opt.textContent = val;
-    filterSector.appendChild(opt);
+    appendSectorOption(val);
   });
+
+  if (selectedValue) {
+    appendSectorOption(selectedValue);
+    filterSector.value = normalizeSectorValue(selectedValue);
+  }
 }
 
 function setFilterStatus(msg, type) {
   filterStatusEl.textContent = msg;
   filterStatusEl.className   = "filter-status" + (type ? " " + type : "");
+  filterStatusEl.style.display = msg ? "" : "none";
 }
 
 function getGeometryCenter(geometry) {
@@ -795,7 +1288,10 @@ function matchFilter(props, numLote, codMz, sector, codCatas) {
   var p = props || {};
   if (numLote)  { var v  = String(pickFirstProp(p, ["num_lote","NUM_LOTE","lote","LOTE"]) || "").toLowerCase(); if (v.indexOf(numLote.toLowerCase()) === -1) return false; }
   if (codMz)    { var v2 = String(pickFirstProp(p, ["cod_mz","COD_MZ","manzana","MANZANA"]) || "").toLowerCase(); if (v2.indexOf(codMz.toLowerCase()) === -1) return false; }
-  if (sector)   { var v3 = String(pickFirstProp(p, ["sector","SECTOR"]) || ""); if (v3 !== sector) return false; }
+  if (sector)   {
+    var v3 = normalizeSectorValue(pickFirstProp(p, ["sector","SECTOR","nom_sector","NOM_SECTOR","zona","ZONA"]));
+    if (v3.toLowerCase() !== normalizeSectorValue(sector).toLowerCase()) return false;
+  }
   if (codCatas) { var v4 = String(pickFirstProp(p, ["cod_catas","COD_CATAS","cod_catastral"]) || "").toLowerCase(); if (v4.indexOf(codCatas.toLowerCase()) === -1) return false; }
   return true;
 }
@@ -829,7 +1325,7 @@ function searchFeatures() {
   if (matchLeaflet) { selectedLayer = matchLeaflet; matchLeaflet.setStyle(SELECTED_STYLE); matchLeaflet.bringToFront(); }
 
   setPanelCompact(false);
-  updateAllFields(match.properties || {});
+  updateAllFields(match.properties || {}, match.geometry);
   setFilterStatus("Predio encontrado.", "success");
   if (isMobileView()) openMobilePanel("info");
 }

@@ -1,0 +1,39 @@
+{
+  "visibleFields": [
+    "lote_id",
+    "cod_catas",
+    "num_lote",
+    "cod_mz",
+    "sector",
+    "area_m2",
+    "perimetro_m",
+    "uso",
+    "estado",
+    "condicion"
+  ],
+  "hiddenFields": [
+    "created_at",
+    "updated_at",
+    "source_layer",
+    "source_path",
+    "source_id"
+  ],
+  "extraLayers": [
+    
+        {
+      "id": "predio_rural",
+      "label": "Predio Rural",
+      "sourceType": "wms",
+      "wmsUrl": "https://winlmprap09.midagri.gob.pe/winlmprap13/services/ogc/COPREDRUST/MapServer/WmsServer?",
+      "wmsLayers": "0",
+      "wmsVersion": "1.1.1",
+      "wmsFormat": "image/jpeg",
+      "wmsTransparent": false,
+      "wmsCrs": "EPSG:4326",
+      "wmsOpacity": 0.65,
+      "wmsTiled": true,
+      "wmsAttribution": "MIDAGRI - COPREDRUST",
+      "visible": false
+    }
+  ]
+}

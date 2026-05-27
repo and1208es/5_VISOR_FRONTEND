@@ -15,7 +15,7 @@
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
   <!-- Vector Tiles -->
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=20260518b" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
@@ -99,13 +99,21 @@
         </div>
         <p id="filter-status" class="filter-status"></p>
       </aside>
+
+
+    </div>
+
+    <div id="measurement-display" class="measurement-display measurement-display--hidden">
+      <div class="measurement-display__content">
+        <div id="measurement-readout" class="measurement-display__readout">Selecciona una herramienta</div>
+      </div>
     </div>
 
     <div id="map"></div>
   </div>
 </div>
 
-<script src="app.js"></script>
+<script src="app.js?v=20260518d"></script>
 
 </body>
 </html>

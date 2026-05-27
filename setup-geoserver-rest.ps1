@@ -5,12 +5,12 @@ param(
   [string]$DbHost = "db",
   [int]$DbPort = 5432,
   [string]$DbName = "geoportal",
-  [string]$DbSchema = "public",
+  [string]$DbSchema = "geoportal",
   [string]$DbUser,
   [string]$DbPassword,
   [string]$GeoServerUser,
   [string]$GeoServerPassword,
-  [string[]]$Layers = @("capa_lotes", "capa_manzanas")
+  [string[]]$Layers = @("lotes", "manzanas")
 )
 
 $ErrorActionPreference = "Stop"
@@ -99,7 +99,7 @@ catch {
 
 if (-not $workspaceExists) {
   Write-Host "Creando workspace $Workspace ..."
-  $workspaceBody = "{\"workspace\":{\"name\":\"$Workspace\"}}"
+  $workspaceBody = '{"workspace":{"name":"' + $Workspace + '"}}'
   Invoke-GeoServerJson -Method Post -Url "$GeoServerUrl/rest/workspaces" -Headers $headers -Body $workspaceBody | Out-Null
 }
 else {
@@ -116,9 +116,7 @@ catch {
   $storeExists = $false
 }
 
-if (-not $storeExists) {
-  Write-Host "Creando datastore $Store ..."
-  $storeBody = @"
+$storeBody = @"
 {
   "dataStore": {
     "name": "$Store",
@@ -138,10 +136,13 @@ if (-not $storeExists) {
 }
 "@
 
+if (-not $storeExists) {
+  Write-Host "Creando datastore $Store ..."
   Invoke-GeoServerJson -Method Post -Url "$GeoServerUrl/rest/workspaces/$Workspace/datastores" -Headers $headers -Body $storeBody | Out-Null
 }
 else {
-  Write-Host "Datastore ya existe: $Store"
+  Write-Host "Datastore ya existe: $Store. Actualizando parametros..."
+  Invoke-GeoServerJson -Method Put -Url $storeUrl -Headers $headers -Body $storeBody | Out-Null
 }
 
 # 3) Publicar feature types (capas)
@@ -162,7 +163,7 @@ foreach ($layer in $Layers) {
   }
 
   Write-Host "Publicando capa $Workspace`:$layer ..."
-  $featureBody = "{\"featureType\":{\"name\":\"$layer\",\"nativeName\":\"$layer\",\"enabled\":true}}"
+  $featureBody = '{"featureType":{"name":"' + $layer + '","nativeName":"' + $layer + '","enabled":true}}'
   Invoke-GeoServerJson -Method Post -Url "$GeoServerUrl/rest/workspaces/$Workspace/datastores/$Store/featuretypes" -Headers $headers -Body $featureBody | Out-Null
 }
 
