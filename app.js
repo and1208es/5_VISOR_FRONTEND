@@ -885,11 +885,27 @@ function buildGeoServerWfsUrl(typeName) {
 }
 
 function fetchGeoJson(url, sourceLabel) {
-  return fetch(url).then(function (response) {
+  return fetch(url, { cache: "no-store" }).then(function (response) {
     if (!response.ok) {
       throw new Error(sourceLabel + " no disponible (HTTP " + response.status + ")");
     }
-    return response.json();
+    return response.arrayBuffer();
+  }).then(function (buffer) {
+    var bytes = new Uint8Array(buffer);
+    var decoder;
+
+    if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
+      decoder = new TextDecoder("utf-16le");
+      return JSON.parse(decoder.decode(bytes.subarray(2)));
+    }
+
+    if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) {
+      decoder = new TextDecoder("utf-16be");
+      return JSON.parse(decoder.decode(bytes.subarray(2)));
+    }
+
+    decoder = new TextDecoder("utf-8");
+    return JSON.parse(decoder.decode(bytes).replace(/^\uFEFF/, ""));
   });
 }
 
