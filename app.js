@@ -43,9 +43,6 @@ var lotesBounds = L.latLngBounds(
   [-12.168404765620012, -73.8211851939101]
 );
 
-// Límites de arrastre deshabilitados para navegación completamente libre
-// map.setMaxBounds(lotesBounds.pad(0.9));
-
 var osmStandardLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   attribution: "© OpenStreetMap contributors",
   maxZoom: STREETS_MAX_ZOOM,
@@ -171,7 +168,8 @@ var mapToolsState = {
   panelEl: null,
   sections: {},
   buttons: {},
-  activeSection: null
+  activeSection: null,
+  extraLayersContainerEl: null
 };
 
 function activateMapToolsSection(sectionName) {
@@ -193,6 +191,54 @@ function activateMapToolsSection(sectionName) {
 
   Object.keys(mapToolsState.buttons).forEach(function (key) {
     mapToolsState.buttons[key].classList.toggle("active", mapToolsState.activeSection === key);
+  });
+}
+
+function toggleExtraLayerVisibility(layerId) {
+  var entry = extraOverlayLayers.find(function (candidate) {
+    return candidate.id === layerId;
+  });
+  if (!entry || !entry.layer) return;
+
+  if (map.hasLayer(entry.layer)) {
+    map.removeLayer(entry.layer);
+  } else {
+    entry.layer.addTo(map);
+    syncOverlayOrder();
+  }
+
+  renderExtraLayerToggles();
+}
+
+function renderExtraLayerToggles() {
+  if (!mapToolsState.extraLayersContainerEl) return;
+
+  var container = mapToolsState.extraLayersContainerEl;
+  container.innerHTML = "";
+
+  if (!extraOverlayLayers.length) {
+    var emptyState = document.createElement("div");
+    emptyState.className = "map-tools__extra-empty";
+    emptyState.textContent = "No hay capas adicionales.";
+    container.appendChild(emptyState);
+    return;
+  }
+
+  extraOverlayLayers.forEach(function (entry) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "map-tools__extra-toggle";
+
+    var isVisible = Boolean(entry.layer && map.hasLayer(entry.layer));
+    btn.classList.toggle("active", isVisible);
+    btn.textContent = (isVisible ? "Ocultar" : "Mostrar") + " " + entry.label;
+
+    btn.addEventListener("click", function (event) {
+      event.preventDefault();
+      toggleExtraLayerVisibility(entry.id);
+    });
+
+    container.appendChild(btn);
   });
 }
 
@@ -729,6 +775,9 @@ function normalizeLayerConfig(rawConfig) {
     if (sourceType === "wms") {
       return Boolean(entry.wmsLayers || entry.typeName);
     }
+    if (sourceType === "arcgis-rest") {
+      return Boolean(entry.arcgisUrl);
+    }
     return Boolean(entry.typeName);
   }).map(function (entry) {
     var sourceType = String(entry.sourceType || "wfs").toLowerCase();
@@ -736,7 +785,7 @@ function normalizeLayerConfig(rawConfig) {
     return {
       id: String(entry.id),
       label: entry.label ? String(entry.label) : String(entry.id),
-      sourceType: sourceType === "wms" ? "wms" : "wfs",
+      sourceType: sourceType === "wms" ? "wms" : (sourceType === "arcgis-rest" ? "arcgis-rest" : "wfs"),
       typeName: entry.typeName ? String(entry.typeName) : null,
       fallbackPath: entry.fallbackPath ? String(entry.fallbackPath) : null,
       visible: entry.visible !== false,
@@ -752,7 +801,18 @@ function normalizeLayerConfig(rawConfig) {
       wmsOpacity: entry.wmsOpacity !== undefined ? Number(entry.wmsOpacity) : 1,
       wmsAttribution: entry.wmsAttribution ? String(entry.wmsAttribution) : "",
       wmsTiled: entry.wmsTiled === true,
-      wmsExtraParams: entry.wmsExtraParams && typeof entry.wmsExtraParams === "object" ? entry.wmsExtraParams : {}
+      wmsExtraParams: entry.wmsExtraParams && typeof entry.wmsExtraParams === "object" ? entry.wmsExtraParams : {},
+      arcgisUrl: entry.arcgisUrl ? String(entry.arcgisUrl) : null,
+      arcgisLayers: entry.arcgisLayers ? String(entry.arcgisLayers) : (entry.arcgisLayerId !== undefined ? "show:" + String(entry.arcgisLayerId) : "show:0"),
+      arcgisFormat: entry.arcgisFormat ? String(entry.arcgisFormat) : "png32",
+      arcgisTransparent: entry.arcgisTransparent !== false,
+      arcgisOpacity: entry.arcgisOpacity !== undefined ? Number(entry.arcgisOpacity) : 1,
+      arcgisAttribution: entry.arcgisAttribution ? String(entry.arcgisAttribution) : "",
+      arcgisSpatialReference: entry.arcgisSpatialReference ? String(entry.arcgisSpatialReference) : "3857",
+      arcgisMaxImageSize: entry.arcgisMaxImageSize !== undefined ? Number(entry.arcgisMaxImageSize) : 1200,
+      arcgisUseDevicePixelRatio: entry.arcgisUseDevicePixelRatio !== false,
+      arcgisUseCors: entry.arcgisUseCors !== false,
+      arcgisExtraParams: entry.arcgisExtraParams && typeof entry.arcgisExtraParams === "object" ? entry.arcgisExtraParams : {}
     };
   });
 }
@@ -874,6 +934,183 @@ function createExtraWmsLayer(layerDefinition) {
   return hostLayer;
 }
 
+function createExtraArcGisRestLayer(layerDefinition) {
+  var hostLayer = L.layerGroup();
+  var mapInstance = null;
+  var imageOverlay = null;
+  var requestToken = 0;
+  var redrawTimer = null;
+  var spatialReference = String(layerDefinition.arcgisSpatialReference || "3857");
+  var useCors = layerDefinition.arcgisUseCors !== false;
+  var pendingImage = null;
+  var lastRequestUrl = null;
+
+  function getBoundsCoordinates(bounds) {
+    if (spatialReference === "4326") {
+      return {
+        southWest: bounds.getSouthWest(),
+        northEast: bounds.getNorthEast()
+      };
+    }
+
+    return {
+      southWest: mapInstance.options.crs.project(bounds.getSouthWest()),
+      northEast: mapInstance.options.crs.project(bounds.getNorthEast())
+    };
+  }
+
+  function buildExportUrl(bounds, size) {
+    var projectedBounds = getBoundsCoordinates(bounds);
+    var pixelRatio = layerDefinition.arcgisUseDevicePixelRatio
+      ? Math.max(1, Math.min(2, window.devicePixelRatio || 1))
+      : 1;
+    var imageSize = {
+      x: Math.max(1, Math.round(size.x * pixelRatio)),
+      y: Math.max(1, Math.round(size.y * pixelRatio))
+    };
+    var maxImageSize = Number(layerDefinition.arcgisMaxImageSize);
+    if (Number.isFinite(maxImageSize) && maxImageSize > 0) {
+      var maxCurrentSize = Math.max(imageSize.x, imageSize.y);
+      if (maxCurrentSize > maxImageSize) {
+        var scale = maxImageSize / maxCurrentSize;
+        imageSize.x = Math.max(1, Math.round(imageSize.x * scale));
+        imageSize.y = Math.max(1, Math.round(imageSize.y * scale));
+      }
+    }
+    var exportUrl = String(layerDefinition.arcgisUrl || "").replace(/\/+$/, "") + "/export";
+    var params = new URLSearchParams({
+      bbox: spatialReference === "4326"
+        ? [projectedBounds.southWest.lng, projectedBounds.southWest.lat, projectedBounds.northEast.lng, projectedBounds.northEast.lat].join(",")
+        : [projectedBounds.southWest.x, projectedBounds.southWest.y, projectedBounds.northEast.x, projectedBounds.northEast.y].join(","),
+      bboxSR: spatialReference,
+      imageSR: spatialReference,
+      size: String(imageSize.x) + "," + String(imageSize.y),
+      format: String(layerDefinition.arcgisFormat || "png32"),
+      transparent: layerDefinition.arcgisTransparent ? "true" : "false",
+      f: "image"
+    });
+
+    if (layerDefinition.arcgisLayers) {
+      params.set("layers", layerDefinition.arcgisLayers);
+    }
+
+    Object.keys(layerDefinition.arcgisExtraParams || {}).forEach(function (key) {
+      params.set(key, layerDefinition.arcgisExtraParams[key]);
+    });
+
+    return exportUrl + "?" + params.toString();
+  }
+
+  function clearCurrentOverlay() {
+    if (imageOverlay && mapInstance && mapInstance.hasLayer(imageOverlay)) {
+      mapInstance.removeLayer(imageOverlay);
+    }
+    imageOverlay = null;
+  }
+
+  function redraw() {
+    if (!mapInstance) return;
+
+    var bounds = mapInstance.getBounds();
+    var size = mapInstance.getSize();
+    var url = buildExportUrl(bounds, size);
+    if (url === lastRequestUrl) {
+      return;
+    }
+    var previousPendingImage = pendingImage;
+    lastRequestUrl = url;
+    var currentToken = ++requestToken;
+    var preload = new Image();
+    pendingImage = preload;
+
+    if (useCors) {
+      preload.crossOrigin = "anonymous";
+    }
+    preload.onload = function () {
+      if (currentToken !== requestToken || !mapInstance) return;
+      pendingImage = null;
+      clearCurrentOverlay();
+      var overlayOptions = {
+        opacity: Math.max(0, Math.min(1, layerDefinition.arcgisOpacity)),
+        interactive: false
+      };
+      if (useCors) {
+        overlayOptions.crossOrigin = true;
+      }
+      imageOverlay = L.imageOverlay(url, bounds, overlayOptions);
+      imageOverlay.addTo(mapInstance);
+    };
+
+    preload.onerror = function () {
+      if (currentToken !== requestToken) return;
+      pendingImage = null;
+      lastRequestUrl = null;
+      if (mapInstance && mapInstance.hasLayer(hostLayer)) {
+        mapInstance.removeLayer(hostLayer);
+        renderExtraLayerToggles();
+      }
+      console.warn("No se pudo cargar la capa ArcGIS REST " + layerDefinition.label + ".");
+    };
+
+    if (previousPendingImage && previousPendingImage !== preload) {
+      previousPendingImage.onload = null;
+      previousPendingImage.onerror = null;
+      previousPendingImage.src = "";
+    }
+
+    preload.src = url;
+  }
+
+  function scheduleRedraw() {
+    if (!mapInstance) return;
+    if (redrawTimer) {
+      clearTimeout(redrawTimer);
+    }
+    redrawTimer = setTimeout(redraw, 220);
+  }
+
+  hostLayer.onAdd = function (addedMap) {
+    mapInstance = addedMap;
+    mapInstance.on("moveend zoomend resize", scheduleRedraw);
+    scheduleRedraw();
+  };
+
+  hostLayer.onRemove = function () {
+    if (redrawTimer) {
+      clearTimeout(redrawTimer);
+      redrawTimer = null;
+    }
+    if (pendingImage) {
+      pendingImage.onload = null;
+      pendingImage.onerror = null;
+      pendingImage.src = "";
+      pendingImage = null;
+    }
+    if (mapInstance) {
+      mapInstance.off("moveend zoomend resize", scheduleRedraw);
+    }
+    clearCurrentOverlay();
+    lastRequestUrl = null;
+    mapInstance = null;
+  };
+
+  hostLayer.redraw = redraw;
+  hostLayer.bringToFront = function () {
+    if (imageOverlay && imageOverlay.bringToFront) {
+      imageOverlay.bringToFront();
+    }
+    return hostLayer;
+  };
+  hostLayer.bringToBack = function () {
+    if (imageOverlay && imageOverlay.bringToBack) {
+      imageOverlay.bringToBack();
+    }
+    return hostLayer;
+  };
+
+  return hostLayer;
+}
+
 function buildGeoServerWfsUrl(typeName) {
   return "/geoserver/" + dataSourceState.workspace + "/ows" +
     "?service=WFS" +
@@ -939,6 +1176,7 @@ function clearExtraOverlayLayers() {
     }
   });
   extraOverlayLayers = [];
+  renderExtraLayerToggles();
 }
 
 function loadConfiguredExtraLayers() {
@@ -949,6 +1187,15 @@ function loadConfiguredExtraLayers() {
         source: layerDefinition.wmsUrl.indexOf("/geoserver/") !== -1 ? "geoserver" : "remote-wms",
         index: index,
         mode: "wms"
+      });
+    }
+
+    if (layerDefinition.sourceType === "arcgis-rest") {
+      return Promise.resolve({
+        definition: layerDefinition,
+        source: "arcgis-rest",
+        index: index,
+        mode: "arcgis-rest"
       });
     }
 
@@ -993,13 +1240,19 @@ function loadLayers() {
   }).then(function (results) {
     clearExtraOverlayLayers();
 
-    lotesRawData  = results[0].geojson;
-    manzanasLayer = createManzanasLayer(results[1].geojson).addTo(map);
+    var lotesResult = results[0];
+    var manzanasResult = results[1];
+    var extraLayerEntries = Array.isArray(results[2]) ? results[2] : [];
+
+    lotesRawData  = lotesResult.geojson;
+    manzanasLayer = createManzanasLayer(manzanasResult.geojson).addTo(map);
     lotesLayer    = createLotesLayer(lotesRawData).addTo(map);
 
-    extraOverlayLayers = results[2].map(function (entry) {
+    extraOverlayLayers = extraLayerEntries.map(function (entry) {
       var leafletLayer = entry.mode === "wms"
         ? createExtraWmsLayer(entry.definition)
+        : entry.mode === "arcgis-rest"
+          ? createExtraArcGisRestLayer(entry.definition)
         : createExtraOverlayLayer(entry.geojson, entry.definition, entry.index);
       if (entry.definition.visible) {
         leafletLayer.addTo(map);
@@ -1012,7 +1265,9 @@ function loadLayers() {
       };
     });
 
-    var allSources = [results[0].source, results[1].source];
+    renderExtraLayerToggles();
+
+    var allSources = [lotesResult.source, manzanasResult.source];
     extraOverlayLayers.forEach(function (entry) { allSources.push(entry.source); });
     dataSourceState.resolvedSource = allSources.every(function (source) { return source === "geoserver"; }) ? "geoserver" : "local";
 
@@ -1045,6 +1300,8 @@ var MapToolsControl = L.Control.extend({
     var layersSection = L.DomUtil.create("div", "map-tools__section", panel);
     var layerLabel = L.DomUtil.create("div", "map-tools__label", layersSection);
     var layerSelect = L.DomUtil.create("select", "map-tools__select", layersSection);
+    var extraLayerLabel = L.DomUtil.create("div", "map-tools__label map-tools__label--sub", layersSection);
+    var extraLayersContainer = L.DomUtil.create("div", "map-tools__extra-layers", layersSection);
     var measureSection = L.DomUtil.create("div", "map-tools__section", panel);
     var measureLabel = L.DomUtil.create("div", "map-tools__label", measureSection);
     var modeGroup = L.DomUtil.create("div", "measure-control__modes", measureSection);
@@ -1077,6 +1334,7 @@ var MapToolsControl = L.Control.extend({
 
     layerLabel.textContent = "Capas visibles";
     layerSelect.innerHTML = "<option value='ambas'>Lotes y manzanas</option><option value='lotes'>Solo lotes</option><option value='manzanas'>Solo manzanas</option>";
+    extraLayerLabel.textContent = "Capas adicionales";
 
     measureLabel.textContent = "Medición";
     distanceButton.type = "button";
@@ -1162,6 +1420,7 @@ var MapToolsControl = L.Control.extend({
     mapToolsState.sections = { layers: layersSection, measure: measureSection, print: exportSection };
     mapToolsState.buttons = { layers: layersBtn, measure: measureBtn, print: printBtn };
     mapToolsState.exportStatusEl = exportStatus;
+    mapToolsState.extraLayersContainerEl = extraLayersContainer;
 
     measurementState.readoutEl = readout;
     measurementState.hintEl = hint;
@@ -1170,6 +1429,7 @@ var MapToolsControl = L.Control.extend({
     measurementState.clearButtonEl = clearButton;
 
     activateMapToolsSection("layers");
+    renderExtraLayerToggles();
     updateMeasurementUI();
 
     return shell;

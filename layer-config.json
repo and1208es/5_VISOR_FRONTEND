@@ -23,16 +23,35 @@
         {
       "id": "predio_rural",
       "label": "Predio Rural",
-      "sourceType": "wms",
-      "wmsUrl": "https://winlmprap09.midagri.gob.pe/winlmprap13/services/ogc/COPREDRUST/MapServer/WmsServer?",
-      "wmsLayers": "0",
-      "wmsVersion": "1.1.1",
-      "wmsFormat": "image/jpeg",
-      "wmsTransparent": false,
-      "wmsCrs": "EPSG:4326",
-      "wmsOpacity": 0.65,
-      "wmsTiled": true,
-      "wmsAttribution": "MIDAGRI - COPREDRUST",
+          "sourceType": "arcgis-rest",
+          "arcgisUrl": "https://georural.midagri.gob.pe/geoservicios/rest/services/public/WGS84_Catastro_Rural/MapServer",
+          "arcgisLayers": "show:0",
+          "arcgisFormat": "png32",
+          "arcgisTransparent": true,
+          "arcgisOpacity": 0.65,
+          "arcgisSpatialReference": "4326",
+          "arcgisMaxImageSize": 1800,
+          "arcgisUseDevicePixelRatio": true,
+          "arcgisExtraParams": {
+            "dpi": 160
+          },
+          "arcgisAttribution": "MIDAGRI - Catastro Rural",
+          "visible": true
+    },
+    {
+      "id": "anp_sernanp",
+      "label": "ANP SERNANP",
+      "sourceType": "arcgis-rest",
+      "arcgisUrl": "https://geospatial.sernanp.gob.pe/arcgis_server/rest/services/sernanp_visor/areas_naturales_protegidas/MapServer",
+      "arcgisLayers": "show:0",
+      "arcgisFormat": "png32",
+      "arcgisTransparent": true,
+      "arcgisOpacity": 0.7,
+      "arcgisSpatialReference": "3857",
+      "arcgisMaxImageSize": 1400,
+      "arcgisUseDevicePixelRatio": true,
+      "arcgisUseCors": true,
+      "arcgisAttribution": "SERNANP",
       "visible": false
     }
   ]

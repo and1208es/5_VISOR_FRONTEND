@@ -643,6 +643,10 @@ body {
   letter-spacing: 0.05em;
 }
 
+.map-tools__label--sub {
+  margin-top: 6px;
+}
+
 .map-tools__select {
   min-width: 150px;
   border: 1px solid #c7ddf5;
@@ -652,6 +656,36 @@ body {
   color: #1f4d76;
   background: #f8fbff;
   outline: none;
+}
+
+.map-tools__extra-layers {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.map-tools__extra-toggle {
+  border: 1px solid #c5d9f0;
+  border-radius: 7px;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: #edf2fa;
+  color: #1f4d76;
+}
+
+.map-tools__extra-toggle.active {
+  background: #dcecff;
+  border-color: #9cc4eb;
+  color: #0a4f92;
+}
+
+.map-tools__extra-empty {
+  font-size: 11px;
+  color: #6a7e94;
 }
 
 .measure-control__modes {
