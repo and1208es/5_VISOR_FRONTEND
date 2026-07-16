@@ -16,6 +16,7 @@ html,
 body {
   margin: 0;
   height: 100%;
+  overflow: hidden;
   font-family: "Source Sans 3", "Segoe UI", sans-serif;
   color: var(--ink);
   background:
@@ -171,6 +172,8 @@ body {
   z-index: 1190;
   top: 16px;
   right: 16px;
+  max-height: calc(100% - 32px);
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -364,7 +367,10 @@ body {
 .filter-panel {
   position: relative;
   width: min(240px, calc(100vw - 32px));
+  max-height: min(68vh, 520px);
   padding: 14px 14px 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
   background: rgba(255, 255, 255, 0.95);
   border: 1px solid rgba(10, 90, 167, 0.2);
   border-radius: 14px;

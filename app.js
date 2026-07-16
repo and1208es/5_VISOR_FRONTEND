@@ -135,6 +135,34 @@ var extraOverlayLayers = [];
 
 var selectedLayer = null;
 var suppressNextMapClick = false;
+var DEFAULT_PARCEL_PROJECTS = [
+  {
+    id: "cofopri",
+    label: "Lotes COFOPRI",
+    lotesTypeNames: ["geoportal:lotes"],
+    manzanasTypeNames: ["geoportal:manzanas"],
+    lotesFallbackPaths: ["data/capa_lotes.geojson"],
+    manzanasFallbackPaths: ["data/capa_manzanas.geojson"]
+  },
+  {
+    id: "catastro",
+    label: "Proyecto CATASTRO",
+    lotesTypeNames: ["geoportal:lotes_proyecto"],
+    manzanasTypeNames: ["geoportal:manzanas_proyecto"],
+    lotesFallbackPaths: [null],
+    manzanasFallbackPaths: [null]
+  },
+  {
+    id: "ambas",
+    label: "Ambos Proyectos",
+    lotesTypeNames: ["geoportal:lotes", "geoportal:lotes_proyecto"],
+    manzanasTypeNames: ["geoportal:manzanas", "geoportal:manzanas_proyecto"],
+    lotesFallbackPaths: ["data/capa_lotes.geojson", null],
+    manzanasFallbackPaths: ["data/capa_manzanas.geojson", null]
+  }
+];
+var parcelProjectOptions = DEFAULT_PARCEL_PROJECTS.slice();
+var activeParcelProjectId = DEFAULT_PARCEL_PROJECTS[0].id;
 var dataSourceState = {
   mode: "geoserver",
   workspace: "geoportal",
@@ -169,8 +197,86 @@ var mapToolsState = {
   sections: {},
   buttons: {},
   activeSection: null,
-  extraLayersContainerEl: null
+  extraLayersContainerEl: null,
+  layerSelectEl: null
 };
+
+function normalizeParcelProjects(rawConfig) {
+  function normalizeTypeNames(entry, singleKey, listKey) {
+    var values = Array.isArray(entry[listKey]) ? entry[listKey] : (entry[singleKey] ? [entry[singleKey]] : []);
+    return values.map(function (value) {
+      return String(value || "").trim();
+    }).filter(function (value, index, list) {
+      return value && list.indexOf(value) === index;
+    });
+  }
+
+  function normalizeFallbackPaths(entry, singleKey, listKey, count) {
+    var values = Array.isArray(entry[listKey]) ? entry[listKey] : (entry[singleKey] !== undefined ? [entry[singleKey]] : []);
+    var normalized = values.map(function (value) {
+      if (value === null || value === undefined || value === "") return null;
+      return String(value);
+    });
+
+    while (normalized.length < count) {
+      normalized.push(null);
+    }
+
+    return normalized.slice(0, count);
+  }
+
+  if (!rawConfig || !Array.isArray(rawConfig.parcelProjects)) {
+    return DEFAULT_PARCEL_PROJECTS.slice();
+  }
+
+  var projects = rawConfig.parcelProjects.filter(function (entry) {
+    if (!entry || !entry.id) return false;
+    var lotesNames = normalizeTypeNames(entry, "lotesTypeName", "lotesTypeNames");
+    var manzanasNames = normalizeTypeNames(entry, "manzanasTypeName", "manzanasTypeNames");
+    return lotesNames.length > 0 && manzanasNames.length > 0;
+  }).map(function (entry) {
+    var lotesTypeNames = normalizeTypeNames(entry, "lotesTypeName", "lotesTypeNames");
+    var manzanasTypeNames = normalizeTypeNames(entry, "manzanasTypeName", "manzanasTypeNames");
+
+    return {
+      id: String(entry.id),
+      label: entry.label ? String(entry.label) : String(entry.id),
+      lotesTypeNames: lotesTypeNames,
+      manzanasTypeNames: manzanasTypeNames,
+      lotesFallbackPaths: normalizeFallbackPaths(entry, "lotesFallbackPath", "lotesFallbackPaths", lotesTypeNames.length),
+      manzanasFallbackPaths: normalizeFallbackPaths(entry, "manzanasFallbackPath", "manzanasFallbackPaths", manzanasTypeNames.length)
+    };
+  });
+
+  if (!projects.length) {
+    return DEFAULT_PARCEL_PROJECTS.slice();
+  }
+
+  return projects;
+}
+
+function getActiveParcelProject() {
+  var selected = parcelProjectOptions.find(function (entry) {
+    return entry.id === activeParcelProjectId;
+  });
+  return selected || parcelProjectOptions[0] || DEFAULT_PARCEL_PROJECTS[0];
+}
+
+function renderParcelProjectOptions() {
+  if (!mapToolsState.layerSelectEl) return;
+
+  var select = mapToolsState.layerSelectEl;
+  select.innerHTML = "";
+
+  parcelProjectOptions.forEach(function (project) {
+    var option = document.createElement("option");
+    option.value = project.id;
+    option.textContent = project.label;
+    select.appendChild(option);
+  });
+
+  select.value = getActiveParcelProject().id;
+}
 
 function activateMapToolsSection(sectionName) {
   var isMeasuringActive = measurementState.active && sectionName === "measure";
@@ -566,9 +672,7 @@ function escapeHtml(str) {
 
 var ORDERED_FIELDS = [
   { key: "Codigo", aliases: ["codigo", "CODIGO", "catastro_cod", "CAT_COD"] },
-  { key: "Codigo catastral", aliases: ["cod_catas", "COD_CATAS", "cod_catastral", "COD_CATASTRAL"] },
   { key: "Numero de lote", aliases: ["num_lote", "NUM_LOTE", "lote", "LOTE", "numero_lote", "NUMERO_LOTE"] },
-  { key: "ID del lote", aliases: ["lote_id", "LOTE_ID"] },
   { key: "Manzana", aliases: ["cod_mz", "COD_MZ", "manzana", "MANZANA", "cod_manzana", "COD_MANZANA"] },
   { key: "Sector", aliases: ["sector", "SECTOR", "nom_sector", "NOM_SECTOR", "zona", "ZONA"] },
   { key: "Area (m2)", aliases: ["area", "AREA", "area_m2", "AREA_M2", "Shape_Area", "shape_area"] },
@@ -785,6 +889,7 @@ function normalizeLayerConfig(rawConfig) {
     return {
       id: String(entry.id),
       label: entry.label ? String(entry.label) : String(entry.id),
+      projectId: entry.projectId ? String(entry.projectId) : null,
       sourceType: sourceType === "wms" ? "wms" : (sourceType === "arcgis-rest" ? "arcgis-rest" : "wfs"),
       typeName: entry.typeName ? String(entry.typeName) : null,
       fallbackPath: entry.fallbackPath ? String(entry.fallbackPath) : null,
@@ -1169,6 +1274,58 @@ function fetchLayerCollection(geoServerTypeName, fallbackPath, fallbackLabel) {
   });
 }
 
+function fetchMergedLayerCollections(typeNames, fallbackPaths, fallbackLabel) {
+  if (!Array.isArray(typeNames) || !typeNames.length) {
+    return Promise.resolve({
+      geojson: { type: "FeatureCollection", features: [] },
+      source: "local"
+    });
+  }
+
+  return Promise.all(typeNames.map(function (typeName, index) {
+    var fallbackPath = Array.isArray(fallbackPaths) ? (fallbackPaths[index] || null) : null;
+    var label = typeNames.length > 1 ? (fallbackLabel + " " + (index + 1)) : fallbackLabel;
+
+    return fetchLayerCollection(typeName, fallbackPath, label).then(function (result) {
+      var featureList = Array.isArray(result.geojson && result.geojson.features) ? result.geojson.features : [];
+      var tagged = featureList.map(function (feature) {
+        var clonedFeature = Object.assign({}, feature);
+        var props = Object.assign({}, feature.properties || {});
+        if (!props.source_layer) {
+          props.source_layer = typeName;
+        }
+        clonedFeature.properties = props;
+        return clonedFeature;
+      });
+
+      return {
+        source: result.source,
+        features: tagged
+      };
+    });
+  })).then(function (collections) {
+    var mergedFeatures = [];
+    var allGeoserver = true;
+
+    collections.forEach(function (entry) {
+      if (entry.source !== "geoserver") {
+        allGeoserver = false;
+      }
+      if (Array.isArray(entry.features) && entry.features.length) {
+        mergedFeatures = mergedFeatures.concat(entry.features);
+      }
+    });
+
+    return {
+      geojson: {
+        type: "FeatureCollection",
+        features: mergedFeatures
+      },
+      source: allGeoserver ? "geoserver" : "local"
+    };
+  });
+}
+
 function clearExtraOverlayLayers() {
   extraOverlayLayers.forEach(function (entry) {
     if (entry.layer && map.hasLayer(entry.layer)) {
@@ -1179,8 +1336,15 @@ function clearExtraOverlayLayers() {
   renderExtraLayerToggles();
 }
 
-function loadConfiguredExtraLayers() {
-  return Promise.all(layerConfigState.extraLayers.map(function (layerDefinition, index) {
+function loadConfiguredExtraLayers(activeProjectId) {
+  var scopedLayers = layerConfigState.extraLayers.filter(function (layerDefinition) {
+    if (!layerDefinition.projectId) return true;
+    if (layerDefinition.projectId === activeProjectId) return true;
+    if (activeProjectId === "ambas") return true;
+    return false;
+  });
+
+  return Promise.all(scopedLayers.map(function (layerDefinition, index) {
     if (layerDefinition.sourceType === "wms") {
       return Promise.resolve({
         definition: layerDefinition,
@@ -1220,24 +1384,46 @@ function loadConfiguredExtraLayers() {
   });
 }
 
-function loadLayers() {
+function loadLayers(nextProjectId) {
+  var previousProjectId = activeParcelProjectId;
+  var requestedProjectId = nextProjectId ? String(nextProjectId) : activeParcelProjectId;
+  var activeProject = null;
+
   var statusEl = document.getElementById("filter-status");
   if (statusEl) {
     statusEl.textContent = "";
     statusEl.style.display = "none";
   }
 
-  loadLayerConfig().then(function (rawConfig) {
+  return loadLayerConfig().then(function (rawConfig) {
+    parcelProjectOptions = normalizeParcelProjects(rawConfig);
+    if (!parcelProjectOptions.some(function (entry) { return entry.id === requestedProjectId; })) {
+      requestedProjectId = parcelProjectOptions.some(function (entry) { return entry.id === activeParcelProjectId; })
+        ? activeParcelProjectId
+        : parcelProjectOptions[0].id;
+    }
+
+    activeProject = parcelProjectOptions.find(function (entry) {
+      return entry.id === requestedProjectId;
+    }) || parcelProjectOptions[0];
+    dataSourceState.lotesTypeName = activeProject.lotesTypeNames[0] || "";
+    dataSourceState.manzanasTypeName = activeProject.manzanasTypeNames[0] || "";
+
     layerConfigState.extraLayers = normalizeLayerConfig(rawConfig);
     layerConfigState.hiddenFields = normalizeHiddenFields(rawConfig);
     layerConfigState.visibleFields = normalizeVisibleFields(rawConfig);
+    renderParcelProjectOptions();
 
     return Promise.all([
-      fetchLayerCollection(dataSourceState.lotesTypeName, "data/capa_lotes.geojson", "capa_lotes.geojson"),
-      fetchLayerCollection(dataSourceState.manzanasTypeName, "data/capa_manzanas.geojson", "capa_manzanas.geojson"),
-      loadConfiguredExtraLayers()
+      fetchMergedLayerCollections(activeProject.lotesTypeNames, activeProject.lotesFallbackPaths, activeProject.label + " - lotes"),
+      fetchMergedLayerCollections(activeProject.manzanasTypeNames, activeProject.manzanasFallbackPaths, activeProject.label + " - manzanas"),
+      loadConfiguredExtraLayers(activeProject.id)
     ]);
   }).then(function (results) {
+    activeParcelProjectId = activeProject.id;
+    if (lotesLayer && map.hasLayer(lotesLayer)) map.removeLayer(lotesLayer);
+    if (manzanasLayer && map.hasLayer(manzanasLayer)) map.removeLayer(manzanasLayer);
+    clearSelection();
     clearExtraOverlayLayers();
 
     var lotesResult = results[0];
@@ -1273,6 +1459,7 @@ function loadLayers() {
 
     syncOverlayOrder();
     populateSectorOptions(lotesRawData);
+    renderParcelProjectOptions();
     if (statusEl) {
       statusEl.textContent = "";
       statusEl.className = "filter-status";
@@ -1285,6 +1472,9 @@ function loadLayers() {
       statusEl.className = "filter-status error";
       statusEl.style.display = "";
     }
+    activeParcelProjectId = previousProjectId;
+    renderParcelProjectOptions();
+    throw err;
   });
 }
 
@@ -1332,8 +1522,7 @@ var MapToolsControl = L.Control.extend({
 
     title.textContent = "Herramientas";
 
-    layerLabel.textContent = "Capas visibles";
-    layerSelect.innerHTML = "<option value='ambas'>Lotes y manzanas</option><option value='lotes'>Solo lotes</option><option value='manzanas'>Solo manzanas</option>";
+    layerLabel.textContent = "CAPAS DE LOTES";
     extraLayerLabel.textContent = "Capas adicionales";
 
     measureLabel.textContent = "Medición";
@@ -1384,13 +1573,15 @@ var MapToolsControl = L.Control.extend({
     });
 
     L.DomEvent.on(layerSelect, "change", function () {
-      if (!lotesLayer || !manzanasLayer) return;
-      var value = layerSelect.value;
-      if (value === "lotes") { lotesLayer.addTo(map); map.removeLayer(manzanasLayer); syncOverlayOrder(); return; }
-      if (value === "manzanas") { map.removeLayer(lotesLayer); manzanasLayer.addTo(map); clearSelection(); syncOverlayOrder(); return; }
-      lotesLayer.addTo(map);
-      manzanasLayer.addTo(map);
-      syncOverlayOrder();
+      var selectedProjectId = layerSelect.value;
+      if (!selectedProjectId || selectedProjectId === activeParcelProjectId) return;
+
+      layerSelect.disabled = true;
+      loadLayers(selectedProjectId).catch(function () {
+        layerSelect.value = activeParcelProjectId;
+      }).finally(function () {
+        layerSelect.disabled = false;
+      });
     });
 
     L.DomEvent.on(distanceButton, "click", function (e) {
@@ -1421,6 +1612,7 @@ var MapToolsControl = L.Control.extend({
     mapToolsState.buttons = { layers: layersBtn, measure: measureBtn, print: printBtn };
     mapToolsState.exportStatusEl = exportStatus;
     mapToolsState.extraLayersContainerEl = extraLayersContainer;
+    mapToolsState.layerSelectEl = layerSelect;
 
     measurementState.readoutEl = readout;
     measurementState.hintEl = hint;
@@ -1429,6 +1621,7 @@ var MapToolsControl = L.Control.extend({
     measurementState.clearButtonEl = clearButton;
 
     activateMapToolsSection("layers");
+    renderParcelProjectOptions();
     renderExtraLayerToggles();
     updateMeasurementUI();
 

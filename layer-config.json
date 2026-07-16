@@ -1,7 +1,43 @@
 {
+  "parcelProjects": [
+    {
+      "id": "cofopri",
+      "label": "Lotes COFOPRI",
+      "lotesTypeName": "geoportal:lotes",
+      "manzanasTypeName": "geoportal:manzanas",
+      "lotesFallbackPath": "data/capa_lotes.geojson",
+      "manzanasFallbackPath": "data/capa_manzanas.geojson"
+    },
+    {
+      "id": "catastro",
+      "label": "Proyecto CATASTRO",
+      "lotesTypeName": "geoportal:lotes_proyecto",
+      "manzanasTypeName": "geoportal:manzanas_proyecto",
+      "lotesFallbackPath": "data/capa_lotes_proyecto.geojson",
+      "manzanasFallbackPath": "data/capa_manzanas_proyecto.geojson"
+    },
+    {
+      "id": "ambas",
+      "label": "Ambos Proyectos",
+      "lotesTypeNames": [
+        "geoportal:lotes",
+        "geoportal:lotes_proyecto"
+      ],
+      "manzanasTypeNames": [
+        "geoportal:manzanas",
+        "geoportal:manzanas_proyecto"
+      ],
+      "lotesFallbackPaths": [
+        "data/capa_lotes.geojson",
+        "data/capa_lotes_proyecto.geojson"
+      ],
+      "manzanasFallbackPaths": [
+        "data/capa_manzanas.geojson",
+        "data/capa_manzanas_proyecto.geojson"
+      ]
+    }
+  ],
   "visibleFields": [
-    "lote_id",
-    "cod_catas",
     "num_lote",
     "cod_mz",
     "sector",
@@ -37,6 +73,19 @@
           },
           "arcgisAttribution": "MIDAGRI - Catastro Rural",
           "visible": true
+    },
+    {
+      "id": "matriz_proyecto_catastro",
+      "label": "Matriz Proyecto CATASTRO",
+      "projectId": "catastro",
+      "typeName": "geoportal:matriz_proyecto",
+      "visible": false,
+      "style": {
+        "color": "#8a5a0b",
+        "fillColor": "#f5c879",
+        "fillOpacity": 0.18,
+        "weight": 2
+      }
     },
     {
       "id": "anp_sernanp",

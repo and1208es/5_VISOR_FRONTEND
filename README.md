@@ -68,6 +68,22 @@ docker compose up -d
 3. Abrir el frontend en `http://localhost:8081`.
 4. Configurar GeoServer con el script REST cuando la base tenga las capas listas.
 
+## Mapa rapido de puertos
+
+| Servicio | URL/Host | Puerto host -> contenedor | Nota |
+|---|---|---|---|
+| Frontend (Nginx) | `http://localhost:8081` | `8081 -> 80` | Punto de entrada del visor. |
+| GeoServer (panel directo) | `http://localhost:8082/geoserver/web` | `8082 -> 8080` | Administracion directa de GeoServer. |
+| GeoServer (proxy por web) | `http://localhost:8081/geoserver` | via Nginx | Ruta proxied desde el frontend. |
+| Backend (FastAPI) | red interna Docker | `8000` (sin publicar al host) | Solo accesible entre contenedores. |
+| PostGIS | `localhost` | `5433 -> 5432` | Conexion local para QGIS/psql. |
+
+Resumen corto:
+
+- `8081`: web publica (visor + proxy `/geoserver`).
+- `8082`: GeoServer directo (panel admin).
+- `5433`: base de datos PostGIS.
+
 ## Backend administrativo (FastAPI)
 
 El proyecto ahora incluye un backend en `backend/` para autenticacion, carga de capas y publicacion automatica en GeoServer.
